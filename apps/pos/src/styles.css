@@ -1,0 +1,30 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body,
+#app {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: #f1e9db;
+  color: #2c2620;
+  font-family: "Nunito Variable", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  font-family: inherit;
+}
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 18px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}

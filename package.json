@@ -1,0 +1,14 @@
+{
+  "name": "yf-pos",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Yun Fook Trading POS — offline-first desktop till (Vue 3 SPA, wrapper-agnostic)",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm --filter @yf/pos dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
