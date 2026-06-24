@@ -20,9 +20,10 @@ const img = computed(() => productImage(props.item.image));
       v-if="img"
       class="w-full h-full rounded-14px"
       :style="{
-        backgroundColor: item.tint,
+        backgroundColor: '#fff',
         backgroundImage: `url('${img}')`,
-        backgroundSize: 'cover',
+        backgroundSize: 'contain',
+        backgroundRepeat: 'no-repeat',
         backgroundPosition: 'center',
       }"
     />
@@ -36,7 +37,7 @@ const img = computed(() => productImage(props.item.image));
 
     <span
       v-if="item.tiers.length"
-      class="absolute top-8px right-8px bg-olive text-white text-12px font-800 leading-none px-7px py-3px rounded-full shadow-[0_2px_4px_rgba(0,0,0,.2)]"
+      class="absolute top-4px right-4px bg-olive text-white text-11px font-800 leading-none px-6px py-3px rounded-full shadow-[0_2px_4px_rgba(0,0,0,.2)]"
       title="Bulk price available"
     >★</span>
   </button>

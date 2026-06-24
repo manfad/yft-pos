@@ -22,12 +22,11 @@ export function getRepo(): Promise<SqlPosRepo> {
 }
 
 async function boot(): Promise<SqlPosRepo> {
-  // Electron: the native on-disk DB lives in the main process.
+  // Electron: the native on-disk DB lives in the main process. Production starts
+  // empty — only the seeded catalogue, no demo orders.
   if (window.sqlite) {
-    const bridge = window.sqlite;
-    const driver = createIpcDriver(bridge);
-    const { fresh } = await bridge.meta();
-    return initRepo(driver, { seedDemoOrders: fresh });
+    const driver = createIpcDriver(window.sqlite);
+    return initRepo(driver, { seedDemoOrders: false });
   }
   const SQL = await initSqlJs({ locateFile: () => wasmUrl });
   const saved = await get<Uint8Array>(DB_KEY);

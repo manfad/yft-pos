@@ -240,34 +240,7 @@ async function saveEdit(): Promise<void> {
           Name
           <TextInput v-model="editing.name" title="Item name" placeholder="e.g. Durian" class="w-full" />
         </label>
-        <div class="flex flex-col gap-4px text-13px font-700 text-muted">
-          Image
-          <div class="flex items-center gap-12px">
-            <!-- when an image is chosen, the image itself is the button -->
-            <button
-              v-if="editing.image"
-              type="button"
-              class="w-72px h-72px flex-none rounded-14px border-2 border-border bg-white overflow-hidden cursor-pointer press"
-              title="Change image"
-              @click="imagePickerOpen = true"
-            >
-              <img :src="productImage(editing.image) ?? ''" alt="" class="w-full h-full object-cover" />
-            </button>
-            <button
-              v-else
-              type="button"
-              class="h-72px px-22px rounded-14px border-2 border-dashed border-border bg-tile text-15px font-800 text-muted cursor-pointer press"
-              @click="imagePickerOpen = true"
-            >Select Image</button>
-            <button
-              v-if="editing.image"
-              type="button"
-              class="text-13px font-700 text-faint underline cursor-pointer"
-              @click="editing.image = ''"
-            >Remove</button>
-          </div>
-        </div>
-        <div class="flex gap-12px">
+        <div class="flex gap-12px items-start">
           <div class="flex flex-col gap-4px text-13px font-700 text-muted">
             Unit
             <SelectInput v-model="editing.unit" :options="unitOptions" class="w-120px" />
@@ -275,6 +248,28 @@ async function saveEdit(): Promise<void> {
           <div class="flex flex-col gap-4px text-13px font-700 text-muted">
             Price
             <NumberInput v-model="editing.priceRM" title="Item price (RM)" prefix="RM" class="w-130px" />
+          </div>
+          <div class="flex flex-col gap-4px text-13px font-700 text-muted">
+            Image
+            <button
+              type="button"
+              class="w-56px h-56px flex-none rounded-14px border-2 overflow-hidden cursor-pointer press"
+              :class="
+                editing.image
+                  ? 'border-border bg-white'
+                  : 'border-dashed border-border bg-tile flex items-center justify-center'
+              "
+              title="Select image"
+              @click="imagePickerOpen = true"
+            >
+              <img
+                v-if="editing.image"
+                :src="productImage(editing.image) ?? ''"
+                alt=""
+                class="w-full h-full object-cover"
+              />
+              <span v-else class="text-26px font-800 text-muted leading-none">＋</span>
+            </button>
           </div>
         </div>
 
