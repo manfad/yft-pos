@@ -67,8 +67,13 @@ const totals = (rows: Row[]): { cash: number; bank: number; qr: number; total: n
   );
 
 const panels = computed(() => [
-  { kind: "day" as const, title: "Selected day", sub: sel.value.format("DD MMM YYYY"), rows: aggregate(dayOrders.value) },
-  { kind: "mtd" as const, title: "Month to date", sub: `1–${sel.value.format("DD MMM YYYY")}`, rows: aggregate(mtdOrders.value) },
+  { kind: "day" as const, title: "Day", sub: sel.value.format("DD MMM YYYY"), rows: aggregate(dayOrders.value) },
+  {
+    kind: "mtd" as const,
+    title: "Month",
+    sub: `${sel.value.startOf("month").format("DD")} - ${sel.value.format("DD MMM YYYY")}`,
+    rows: aggregate(mtdOrders.value),
+  },
 ]);
 </script>
 
