@@ -193,8 +193,8 @@ async function confirm(method: PaymentMethod): Promise<void> {
 
   <NumpadDialog
     :open="numpadLine !== null"
-    :name="numpadLine?.item.name ?? ''"
-    :unit="numpadLine?.item.unit ?? 'each'"
+    :title="`${numpadLine?.item.name ?? ''} — quantity`"
+    :unit="unitLabel(numpadLine?.item.unit ?? 'each')"
     :initial="numpadLine ? numpadLine.qtyMilli / 1000 : 0"
     @confirm="confirmQty"
     @close="numpadUid = null"

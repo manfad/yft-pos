@@ -18,8 +18,8 @@ import { useUi } from "../stores/ui";
 import { currentCompany } from "../place";
 import TopBar from "../components/TopBar.vue";
 import SelectInput from "../components/SelectInput.vue";
-import MoneyInput from "../components/MoneyInput.vue";
 import TextInput from "../components/TextInput.vue";
+import NumberInput from "../components/NumberInput.vue";
 import { tintFromName } from "../tint";
 
 const catalog = useCatalog();
@@ -140,11 +140,6 @@ async function saveEdit(): Promise<void> {
   }
 }
 
-async function toggleActive(it: PricedItem): Promise<void> {
-  const repo = await getRepo();
-  await repo.setItemActive(it.id, !it.active);
-  await refresh();
-}
 </script>
 
 <template>
@@ -201,21 +196,17 @@ async function toggleActive(it: PricedItem): Promise<void> {
                 <span
                   v-for="t in it.tiers"
                   :key="t.id"
-                  class="inline-flex items-center gap-4px mr-6px mb-4px px-10px py-5px rounded-full bg-panel border-2 border-borderSoft text-13px font-800 text-ink whitespace-nowrap"
+                  class="inline-flex items-center gap-5px mr-6px mb-4px px-10px py-5px rounded-full bg-panel border-2 border-borderSoft text-13px font-800 text-ink whitespace-nowrap"
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="m6 15 6-6 6 6" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                  {{ fmtQtyUnit(t.minQtyMilli, it.unit) }} → {{ fmtMoney(t.priceCents) }}
+                  {{ fmtQtyUnit(t.minQtyMilli, it.unit) }}
+                  <span class="font-900 text-[#e0a92e]">=</span>
+                  {{ fmtMoney(t.priceCents) }}
                 </span>
               </template>
             </td>
             <td class="p-12px">
               <div class="flex gap-8px justify-end">
                 <button class="pill-btn h-36px px-14px text-14px" @click="openEdit(it)">Edit</button>
-                <button class="pill-btn h-36px px-14px text-14px" @click="toggleActive(it)">
-                  {{ it.active ? "Hide" : "Restore" }}
-                </button>
               </div>
             </td>
           </tr>
@@ -239,35 +230,52 @@ async function toggleActive(it: PricedItem): Promise<void> {
       <div class="flex flex-col gap-12px">
         <label class="flex flex-col gap-4px text-13px font-700 text-muted">
           Name
-          <TextInput v-model="editing.name" class="w-full" />
+          <TextInput v-model="editing.name" title="Item name" placeholder="e.g. Durian" class="w-full" />
         </label>
         <div class="flex gap-12px">
           <div class="flex flex-col gap-4px text-13px font-700 text-muted">
             Unit
             <SelectInput v-model="editing.unit" :options="unitOptions" class="w-120px" />
           </div>
-          <label class="flex flex-col gap-4px text-13px font-700 text-muted">
+          <div class="flex flex-col gap-4px text-13px font-700 text-muted">
             Price
-            <MoneyInput v-model="editing.priceRM" class="w-130px" />
-          </label>
+            <NumberInput v-model="editing.priceRM" title="Item price (RM)" prefix="RM" class="w-130px" />
+          </div>
         </div>
 
         <!-- tier editor -->
         <div class="mt-6px">
           <div class="flex items-center justify-between mb-8px">
-            <span class="text-14px font-800">Quantity discounts</span>
+            <span class="text-14px font-800">Condition</span>
             <button class="pill-btn h-32px px-12px text-13px" @click="addTierRow">+ Add tier</button>
           </div>
           <div v-if="!editing.tiers.length" class="text-13px font-700 text-faint">
             No discounts. e.g. add “≥ 30 → RM15” to drop the unit price at 30 {{ editing.unit }}.
           </div>
-          <div v-for="(t, i) in editing.tiers" :key="i" class="flex items-center gap-8px mb-8px">
-            <span class="text-14px font-700 text-muted">when qty ≥</span>
-            <input v-model.number="t.minQtyUnits" type="number" step="0.1" min="0" class="px-8px py-6px rounded-8px border-2 border-border bg-white text-15px text-ink w-80px" />
-            <span class="text-14px font-700 text-muted">{{ editing.unit }} → RM</span>
-            <input v-model.number="t.priceRM" type="number" step="0.01" min="0" class="px-8px py-6px rounded-8px border-2 border-border bg-white text-15px text-ink w-90px" />
-            <span class="text-14px font-700 text-muted">/ {{ editing.unit }}</span>
-            <button class="w-30px h-30px flex-none rounded-full border-none bg-[#f0e7d6] font-800 text-muted cursor-pointer" @click="removeTierRow(i)">✕</button>
+          <div
+            v-for="(t, i) in editing.tiers"
+            :key="i"
+            class="flex items-center gap-12px mb-10px bg-surface border-2 border-borderSoft rounded-16px px-16px py-12px"
+          >
+            <NumberInput
+              v-model="t.minQtyUnits"
+              big
+              :title="`Minimum quantity (${editing.unit})`"
+              :unit="editing.unit"
+              :suffix="editing.unit"
+            />
+            <span class="text-28px font-900 text-[#e0a92e]">=</span>
+            <NumberInput
+              v-model="t.priceRM"
+              big
+              title="Discount price (RM)"
+              prefix="RM"
+              :suffix="`/ ${editing.unit}`"
+            />
+            <button
+              class="w-34px h-34px flex-none ml-auto rounded-full border-none bg-[#d94b3d] text-16px font-900 text-white cursor-pointer press"
+              @click="removeTierRow(i)"
+            >✕</button>
           </div>
         </div>
       </div>
