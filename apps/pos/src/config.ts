@@ -10,7 +10,3 @@ export const COMPANIES: Company[] = [
   { id: 3, name: "Yun Fook Resources" },
 ];
 export const STORE_NAME = COMPANIES[0]!.name;
-
-// Manager passcode gating the Sales report (and the Items page reached from it).
-// Hardcoded for now — move to settings/backend when real auth lands.
-export const MANAGER_PASSCODE = "1234";

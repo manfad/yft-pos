@@ -2,7 +2,6 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import type { Company } from "@yf/core";
-import { salesUnlocked, tryUnlock } from "../auth";
 import { companies, currentCompany, setCompany } from "../place";
 import { from, todayStr, dateLabel, setToday } from "../salesDate";
 import DatePicker from "./DatePicker.vue";
@@ -23,8 +22,7 @@ const todayLabel = new Date().toLocaleDateString("en-GB", {
 //   Dashboard, Item → Menu (/)
 //   Report          → Dashboard
 function goLeft(): void {
-  if (props.mode === "till") openDashboard();
-  else if (props.mode === "report") router.push("/dashboard");
+  if (props.mode === "till" || props.mode === "report") router.push("/dashboard");
   else router.push("/");
 }
 
@@ -42,30 +40,6 @@ function pickDate(v: string) {
   dateOpen.value = false;
 }
 
-// Passcode gate for the Sales report.
-const passOpen = ref(false);
-const passInput = ref("");
-const passErr = ref(false);
-
-function openDashboard() {
-  if (salesUnlocked.value) {
-    router.push("/dashboard");
-    return;
-  }
-  passInput.value = "";
-  passErr.value = false;
-  passOpen.value = true;
-}
-
-function submitPass() {
-  if (tryUnlock(passInput.value)) {
-    passOpen.value = false;
-    router.push("/dashboard");
-  } else {
-    passErr.value = true;
-    passInput.value = "";
-  }
-}
 </script>
 
 <template>
@@ -163,42 +137,5 @@ function submitPass() {
         </button>
       </div>
     </template>
-  </div>
-
-  <!-- passcode modal -->
-  <div
-    v-if="passOpen"
-    class="fixed inset-0 z-100 flex items-center justify-center bg-black/35 px-20px"
-    @click.self="passOpen = false"
-  >
-    <div class="w-full max-w-360px bg-surface border-2 border-border rounded-22px p-24px">
-      <div class="text-22px font-800 text-ink mb-4px">Manager passcode</div>
-      <div class="text-15px font-700 text-muted mb-16px">Enter the passcode to open Sales.</div>
-      <input
-        v-model="passInput"
-        type="password"
-        inputmode="numeric"
-        autofocus
-        class="w-full h-58px px-18px rounded-14px border-2 text-24px font-800 text-center tracking-widest bg-tile outline-none"
-        :class="passErr ? 'border-[#d94b3d]' : 'border-border'"
-        placeholder="••••"
-        @keyup.enter="submitPass"
-      />
-      <div v-if="passErr" class="text-14px font-800 text-[#d94b3d] mt-8px">Wrong passcode.</div>
-      <div class="flex gap-12px mt-20px">
-        <button
-          class="press flex-1 h-54px rounded-14px border-2 border-border bg-panel text-18px font-800 text-muted cursor-pointer"
-          @click="passOpen = false"
-        >
-          Cancel
-        </button>
-        <button
-          class="press flex-1 h-54px rounded-14px border-none bg-olive text-18px font-800 text-white cursor-pointer"
-          @click="submitPass"
-        >
-          Open
-        </button>
-      </div>
-    </div>
   </div>
 </template>
