@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { fmtMoney, fmtQtyUnit, periodRange, type Order, type Unit } from "@yf/core";
 import dayjs from "dayjs";
 import TopBar from "../components/TopBar.vue";
 import { getRepo } from "../db";
 import { currentCompany } from "../place";
-import { from } from "../salesDate";
+import { from, setToday } from "../salesDate";
 import { PAYMENT_UI } from "../payments";
 
 // Per-item sales for the date chosen in the top nav (shared `from`): the selected
@@ -19,6 +19,9 @@ async function loadReport(): Promise<void> {
   monthOrders.value = await repo.listOrders(s, e, currentCompany.value.id);
 }
 onMounted(loadReport);
+// The report's date is transient: reset to today on leave so it never carries a
+// stale date back to the dashboard (avoids picking the wrong day by accident).
+onUnmounted(setToday);
 watch([from, () => currentCompany.value.id], loadReport);
 
 const dayStart = computed(() => sel.value.startOf("day").valueOf());

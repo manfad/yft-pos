@@ -5,6 +5,7 @@ import type { Company } from "@yf/core";
 import { companies, currentCompany, setCompany } from "../place";
 import { from, todayStr, dateLabel, setToday } from "../salesDate";
 import DatePicker from "./DatePicker.vue";
+import SendReportDialog from "./SendReportDialog.vue";
 
 const props = defineProps<{ mode: "till" | "sales" | "admin" | "report" }>();
 
@@ -25,6 +26,9 @@ function goLeft(): void {
   if (props.mode === "till" || props.mode === "report") router.push("/dashboard");
   else router.push("/");
 }
+
+// Send-report dialog (report mode).
+const sendOpen = ref(false);
 
 // Company switcher popover.
 const placeOpen = ref(false);
@@ -86,6 +90,14 @@ function pickDate(v: string) {
       >
         Items
       </button>
+      <!-- report: send the report by email (demo) -->
+      <button
+        v-if="mode === 'report'"
+        class="press flex items-center h-54px px-18px rounded-14px border-2 border-border bg-panel text-16px font-800 text-muted cursor-pointer"
+        @click="sendOpen = true"
+      >
+        Send
+      </button>
       <!-- sales/report: clickable date selector; till/admin: today's date -->
       <div v-if="mode === 'sales' || mode === 'report'" class="relative">
         <button
@@ -138,4 +150,6 @@ function pickDate(v: string) {
       </div>
     </template>
   </div>
+
+  <SendReportDialog :open="sendOpen" @close="sendOpen = false" />
 </template>
