@@ -144,7 +144,7 @@ const panels = computed(() => [
               <td class="pt-12px px-6px text-right font-display text-17px font-700 whitespace-nowrap" :style="{ color: PAYMENT_UI.QR.color }">
                 {{ fmtMoney(totals(p.rows).qr) }}
               </td>
-              <td class="pt-12px pl-6px text-right font-display text-19px font-800 whitespace-nowrap text-terracotta">
+              <td class="pt-12px pl-6px text-right font-display text-19px font-800 whitespace-nowrap text-ink">
                 {{ fmtMoney(totals(p.rows).total) }}
               </td>
             </tr>

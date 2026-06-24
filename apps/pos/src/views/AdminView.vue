@@ -235,25 +235,14 @@ async function saveEdit(): Promise<void> {
       <div class="text-22px font-800 mb-18px">
         {{ editing.id === 0 ? "Add item" : `Edit ${editing.name}` }}
       </div>
-      <div class="flex flex-col gap-12px">
-        <label class="flex flex-col gap-4px text-13px font-700 text-muted">
-          Name
-          <TextInput v-model="editing.name" title="Item name" placeholder="e.g. Durian" class="w-full" />
-        </label>
-        <div class="flex gap-12px items-start">
-          <div class="flex flex-col gap-4px text-13px font-700 text-muted">
-            Unit
-            <SelectInput v-model="editing.unit" :options="unitOptions" class="w-120px" />
-          </div>
-          <div class="flex flex-col gap-4px text-13px font-700 text-muted">
-            Price
-            <NumberInput v-model="editing.priceRM" title="Item price (RM)" prefix="RM" class="w-130px" />
-          </div>
+      <div class="flex flex-col gap-14px">
+        <div class="flex gap-16px">
+          <!-- left: large image picker -->
           <div class="flex flex-col gap-4px text-13px font-700 text-muted">
             Image
             <button
               type="button"
-              class="w-56px h-56px flex-none rounded-14px border-2 overflow-hidden cursor-pointer press"
+              class="w-150px h-150px flex-none rounded-16px border-2 overflow-hidden cursor-pointer press"
               :class="
                 editing.image
                   ? 'border-border bg-white'
@@ -268,8 +257,25 @@ async function saveEdit(): Promise<void> {
                 alt=""
                 class="w-full h-full object-cover"
               />
-              <span v-else class="text-26px font-800 text-muted leading-none">＋</span>
+              <span v-else class="text-42px font-800 text-muted leading-none">＋</span>
             </button>
+          </div>
+          <!-- right: name, then unit + price -->
+          <div class="flex-1 min-w-0 flex flex-col gap-12px">
+            <label class="flex flex-col gap-4px text-13px font-700 text-muted">
+              Name
+              <TextInput v-model="editing.name" title="Item name" placeholder="e.g. Durian" class="w-full" />
+            </label>
+            <div class="flex gap-12px items-start">
+              <div class="flex flex-col gap-4px text-13px font-700 text-muted">
+                Unit
+                <SelectInput v-model="editing.unit" :options="unitOptions" class="w-120px" />
+              </div>
+              <div class="flex flex-col gap-4px text-13px font-700 text-muted">
+                Price
+                <NumberInput v-model="editing.priceRM" title="Item price (RM)" prefix="RM" class="w-130px" />
+              </div>
+            </div>
           </div>
         </div>
 
