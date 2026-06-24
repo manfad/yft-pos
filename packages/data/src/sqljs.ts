@@ -6,6 +6,8 @@ export interface SqlJsStatement {
   bind(params?: SqlValue[]): boolean;
   step(): boolean;
   getAsObject(): Record<string, SqlValue>;
+  /** Current row as a positional value array (column order). */
+  get(): SqlValue[];
   free(): void;
 }
 export interface SqlJsDatabase {
@@ -21,6 +23,10 @@ export interface SqlJsDriverOptions {
 }
 
 /** Wrap a sql.js Database (synchronous) as the async SqlDriver. */
+// Statements that change data — used to decide when to persist after a
+// `values()` call (Drizzle routes `INSERT ... RETURNING` through that path).
+const WRITE_RE = /^\s*(?:insert|update|delete|replace|create|drop|alter)\b/i;
+
 export function createSqlJsDriver(
   db: SqlJsDatabase,
   opts: SqlJsDriverOptions = {},
@@ -33,6 +39,20 @@ export function createSqlJsDriver(
       stmt.bind(params);
       const rows: Row[] = [];
       while (stmt.step()) rows.push(stmt.getAsObject());
+      return rows;
+    } finally {
+      stmt.free();
+    }
+  };
+
+  const values = async (sql: string, params: SqlValue[] = []): Promise<SqlValue[][]> => {
+    const stmt = db.prepare(sql);
+    try {
+      stmt.bind(params);
+      const rows: SqlValue[][] = [];
+      while (stmt.step()) rows.push(stmt.get());
+      // A write-returning statement still mutates — persist it like run() does.
+      if (depth === 0 && WRITE_RE.test(sql)) opts.afterWrite?.();
       return rows;
     } finally {
       stmt.free();
@@ -64,5 +84,5 @@ export function createSqlJsDriver(
     }
   };
 
-  return { all, run, tx };
+  return { all, values, run, tx };
 }

@@ -12,11 +12,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@yf/core": "workspace:*"
+    "@yf/core": "workspace:*",
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
-    "sql.js": "^1.12.0",
     "@types/sql.js": "^1.4.9",
+    "drizzle-kit": "^0.31.10",
+    "sql.js": "^1.12.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }
