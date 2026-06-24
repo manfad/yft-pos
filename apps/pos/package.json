@@ -13,13 +13,15 @@
     "electron:main": "esbuild electron/main.ts --bundle --platform=node --format=cjs --outfile=dist-electron/main.cjs --external:better-sqlite3 --external:electron && esbuild electron/preload.ts --bundle --platform=node --format=cjs --outfile=dist-electron/preload.cjs --external:electron",
     "electron:build": "vue-tsc --noEmit && vite build && pnpm electron:main",
     "dist:win": "pnpm electron:build && electron-builder --win --publish never",
-    "dist:linux": "pnpm electron:build && electron-builder --linux --publish never"
+    "dist:linux": "pnpm electron:build && electron-builder --linux --publish never",
+    "dist:mac": "pnpm electron:build && electron-builder --mac --publish never"
   },
   "build": {
     "appId": "com.yunfook.pos",
     "productName": "Yun Fook POS",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "buildResources"
     },
     "files": [
       "dist/**/*",
@@ -43,6 +45,15 @@
       "executableName": "yunfook-pos",
       "category": "Office",
       "artifactName": "${productName}-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.business",
+      "identity": null,
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     }
   },
   "dependencies": {
