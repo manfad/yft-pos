@@ -4,10 +4,13 @@ import initSqlJs from "sql.js/dist/sql-wasm.js";
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import { get, set } from "idb-keyval";
 import { createSqlJsDriver, initRepo, type SqlPosRepo } from "@yf/data";
+import { createIpcDriver } from "./ipc-driver";
 
-// Browser data layer: sql.js (SQLite-in-wasm) persisted to IndexedDB. When the
-// app is wrapped for desktop, swap this module's driver for tauri-plugin-sql /
-// node:sqlite — nothing above it (repo, stores, UI) changes.
+// Data layer, two backends behind one repo:
+//  - Electron: on-disk SQLite (better-sqlite3) in the main process, reached over
+//    IPC (window.sqlite). Real file = the persistence; low memory.
+//  - Browser dev: sql.js (SQLite-in-wasm) snapshotted to IndexedDB.
+// Nothing above this module (repo, stores, UI) changes between the two.
 
 const DB_KEY = "yf-pos-db";
 
@@ -19,6 +22,13 @@ export function getRepo(): Promise<SqlPosRepo> {
 }
 
 async function boot(): Promise<SqlPosRepo> {
+  // Electron: the native on-disk DB lives in the main process.
+  if (window.sqlite) {
+    const bridge = window.sqlite;
+    const driver = createIpcDriver(bridge);
+    const { fresh } = await bridge.meta();
+    return initRepo(driver, { seedDemoOrders: fresh });
+  }
   const SQL = await initSqlJs({ locateFile: () => wasmUrl });
   const saved = await get<Uint8Array>(DB_KEY);
   const db = saved ? new SQL.Database(saved) : new SQL.Database();
@@ -37,6 +47,11 @@ async function boot(): Promise<SqlPosRepo> {
 
 /** Wipe the local DB (used by the admin "reset demo data" action). */
 export async function resetDb(): Promise<void> {
+  if (window.sqlite) {
+    await window.sqlite.reset();
+    repoPromise = null;
+    return;
+  }
   await set(DB_KEY, undefined as unknown as Uint8Array);
   repoPromise = null;
 }

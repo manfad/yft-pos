@@ -1,0 +1,11 @@
+import { contextBridge, ipcRenderer } from "electron";
+
+// Minimal SQL bridge exposed to the renderer (contextIsolation on). Mirrors the
+// SqlDriver surface; see src/ipc-driver.ts.
+contextBridge.exposeInMainWorld("sqlite", {
+  all: (sql: string, params?: unknown[]) => ipcRenderer.invoke("db:all", sql, params),
+  values: (sql: string, params?: unknown[]) => ipcRenderer.invoke("db:values", sql, params),
+  run: (sql: string, params?: unknown[]) => ipcRenderer.invoke("db:run", sql, params),
+  meta: () => ipcRenderer.invoke("db:meta"),
+  reset: () => ipcRenderer.invoke("db:reset"),
+});

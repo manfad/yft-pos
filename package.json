@@ -10,5 +10,8 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron", "better-sqlite3", "esbuild"]
   }
 }

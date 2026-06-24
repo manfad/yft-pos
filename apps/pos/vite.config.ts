@@ -7,6 +7,6 @@ export default defineConfig({
   // Pre-bundle the classic sql.js UMD so it gets a clean ESM default export.
   // The .wasm is loaded separately via ?url + locateFile (see db.ts).
   optimizeDeps: { include: ["sql.js/dist/sql-wasm.js"] },
-  // Relative base so the built SPA works when wrapped (Tauri/Electron file://).
+  // Relative base so the built SPA works when wrapped (Electron file://).
   base: "./",
 });
