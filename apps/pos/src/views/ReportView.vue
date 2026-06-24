@@ -1,14 +1,33 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
-import { fmtMoney, fmtQtyUnit, type Order, type Unit } from "@yf/core";
+import { computed, onMounted, ref, watch } from "vue";
+import { fmtMoney, fmtQtyUnit, periodRange, type Order, type Unit } from "@yf/core";
 import dayjs from "dayjs";
 import TopBar from "../components/TopBar.vue";
-import { useSales } from "../stores/sales";
+import { getRepo } from "../db";
+import { currentCompany } from "../place";
+import { from } from "../salesDate";
 import { PAYMENT_UI } from "../payments";
 
-// Per-item sales broken down by payment method, for Today vs this Month.
-const sales = useSales();
-onMounted(() => void sales.load());
+// Per-item sales for the date chosen in the top nav (shared `from`): the selected
+// day, and that month up to and including the selected day (month-to-date).
+const sel = computed(() => dayjs(from.value));
+const monthOrders = ref<Order[]>([]);
+
+async function loadReport(): Promise<void> {
+  const repo = await getRepo();
+  const [s, e] = periodRange("month", sel.value.toDate());
+  monthOrders.value = await repo.listOrders(s, e, currentCompany.value.id);
+}
+onMounted(loadReport);
+watch([from, () => currentCompany.value.id], loadReport);
+
+const dayStart = computed(() => sel.value.startOf("day").valueOf());
+const dayEndExcl = computed(() => sel.value.startOf("day").add(1, "day").valueOf());
+const dayOrders = computed(() =>
+  monthOrders.value.filter((o) => o.ts >= dayStart.value && o.ts < dayEndExcl.value),
+);
+// monthOrders already starts at the 1st, so this is month-start .. end of the day.
+const mtdOrders = computed(() => monthOrders.value.filter((o) => o.ts < dayEndExcl.value));
 
 interface Row {
   key: string;
@@ -48,8 +67,8 @@ const totals = (rows: Row[]): { cash: number; bank: number; qr: number; total: n
   );
 
 const panels = computed(() => [
-  { title: "Today", sub: dayjs().format("DD MMM YYYY"), rows: aggregate(sales.todayOrders) },
-  { title: "This Month", sub: dayjs().format("MMMM YYYY"), rows: aggregate(sales.monthOrders) },
+  { kind: "day" as const, title: "Selected day", sub: sel.value.format("DD MMM YYYY"), rows: aggregate(dayOrders.value) },
+  { kind: "mtd" as const, title: "Month to date", sub: `1–${sel.value.format("DD MMM YYYY")}`, rows: aggregate(mtdOrders.value) },
 ]);
 </script>
 
@@ -62,7 +81,7 @@ const panels = computed(() => [
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-22px items-start">
       <div
         v-for="p in panels"
-        :key="p.title"
+        :key="p.kind"
         class="bg-surface border-2 border-border rounded-22px p-24px flex flex-col gap-16px"
       >
         <div>

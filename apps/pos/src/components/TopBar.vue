@@ -107,8 +107,8 @@ function submitPass() {
       >
         ⚙ Items
       </button>
-      <!-- sales mode: clickable date selector; till mode: today's date -->
-      <div v-if="mode === 'sales'" class="relative">
+      <!-- sales/report: clickable date selector; till/admin: today's date -->
+      <div v-if="mode === 'sales' || mode === 'report'" class="relative">
         <button
           class="press flex items-center gap-9px h-54px px-20px rounded-14px bg-ink text-white text-17px font-800 cursor-pointer"
           @click="dateOpen = !dateOpen"
