@@ -77,7 +77,7 @@ async function addMore(): Promise<void> {
             :class="isSelected(t.id, current) ? 'border-olive' : 'border-border'"
             @click="pick(t.id)"
           >
-            <img :src="t.url" :alt="t.id" class="w-full h-full object-cover" />
+            <img :src="t.url" :alt="t.id" class="w-full h-full object-contain" />
             <span
               v-if="isSelected(t.id, current)"
               class="absolute top-4px right-4px w-22px h-22px rounded-full bg-olive text-white text-13px font-900 flex items-center justify-center"

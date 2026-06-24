@@ -28,8 +28,8 @@ const showAll = ref(false);
       <thead>
         <tr class="text-12px font-800 text-faint uppercase tracking-wide">
           <th class="text-left font-800 pb-12px">Item</th>
-          <th class="text-center font-800 pb-12px px-8px">Sold</th>
-          <th class="text-right font-800 pb-12px px-8px">Earned</th>
+          <th class="text-center font-800 pb-12px px-8px">Sales</th>
+          <th class="text-right font-800 pb-12px px-8px">Amount</th>
           <th class="w-44px pb-12px" />
         </tr>
       </thead>
@@ -53,7 +53,7 @@ const showAll = ref(false);
               <div class="text-19px font-800 truncate">{{ s.name }}</div>
             </div>
           </td>
-          <td class="py-12px px-8px text-center font-display text-22px font-700 text-olive whitespace-nowrap">
+          <td class="py-12px px-8px text-center font-display text-22px font-700 text-ink whitespace-nowrap">
             {{ fmtQty(s.qtyMilli) }}
           </td>
           <td class="py-12px px-8px text-right font-display text-22px font-600 text-terracotta whitespace-nowrap">
@@ -93,8 +93,8 @@ const showAll = ref(false);
         <div class="flex items-center gap-14px pb-10px text-12px font-800 text-faint uppercase tracking-wide">
           <div class="w-48px flex-none" />
           <div class="flex-1 min-w-0">Item</div>
-          <div class="w-64px text-center">Sold</div>
-          <div class="w-110px text-right">Earned</div>
+          <div class="w-64px text-center">Sales</div>
+          <div class="w-110px text-right">Amount</div>
         </div>
         <div
           v-for="s in sales"
@@ -111,7 +111,7 @@ const showAll = ref(false);
             }"
           />
           <div class="flex-1 min-w-0 text-18px font-800 truncate">{{ s.name }}</div>
-          <div class="w-64px text-center font-display text-22px font-700 text-olive">
+          <div class="w-64px text-center font-display text-22px font-700 text-ink">
             {{ fmtQty(s.qtyMilli) }}
           </div>
           <div class="w-110px text-right font-display text-23px font-600 text-terracotta">

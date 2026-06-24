@@ -19,10 +19,6 @@ import {
   weekEndMs,
   weekDays,
   weekLabel,
-  isThisWeek,
-  canWeekForward,
-  weekShift,
-  weekToCurrent,
   monthLabel,
   monthStartMs,
   monthYear,
@@ -214,7 +210,7 @@ const itemsStr = (o: Order) => `${o.items.length} ${o.items.length === 1 ? "item
         </div>
       </div>
 
-      <div class="grid grid-cols-1 xl:grid-cols-2 gap-22px items-start">
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-22px items-stretch">
         <SalesSummaryPanel :title="dateLabel" :stats="sales.rangeStats" @inspect-method="inspectMethod" />
         <TopSellerCard
           :orders="sales.rangeOrders"
@@ -256,25 +252,7 @@ const itemsStr = (o: Order) => `${o.items.length} ${o.items.length === 1 ? "item
     <div v-else-if="tab === 'week'" class="flex flex-col gap-22px">
       <!-- week nav + daily chart -->
       <div class="bg-surface border-2 border-border rounded-22px p-24px">
-        <div class="flex items-center justify-between mb-18px flex-wrap gap-10px">
-          <div class="text-20px font-800">Daily Sales — {{ weekLabel }}</div>
-          <div class="flex items-center gap-8px">
-            <button class="pill-btn h-40px px-16px text-18px" title="Previous week" @click="weekShift(-1)">‹</button>
-            <button
-              class="pill-btn h-40px px-14px text-14px"
-              :class="isThisWeek ? 'opacity-50' : ''"
-              :disabled="isThisWeek"
-              @click="weekToCurrent"
-            >This week</button>
-            <button
-              class="pill-btn h-40px px-16px text-18px"
-              :class="!canWeekForward ? 'opacity-50' : ''"
-              :disabled="!canWeekForward"
-              title="Next week"
-              @click="weekShift(1)"
-            >›</button>
-          </div>
-        </div>
+        <div class="text-20px font-800 mb-18px">Weekly Sales — {{ weekLabel }}</div>
         <div class="flex items-end gap-12px h-170px">
           <div
             v-for="x in weekDaily"
@@ -303,7 +281,7 @@ const itemsStr = (o: Order) => `${o.items.length} ${o.items.length === 1 ? "item
       </div>
 
       <!-- stat cards -->
-      <div class="grid grid-cols-1 xl:grid-cols-2 gap-22px items-start">
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-22px items-stretch">
         <SalesSummaryPanel :title="weekLabel" :stats="sales.rangeStats" @inspect-method="inspectMethod" />
         <TopSellerCard
           :orders="sales.rangeOrders"
@@ -346,7 +324,7 @@ const itemsStr = (o: Order) => `${o.items.length} ${o.items.length === 1 ? "item
     <div v-else class="flex flex-col gap-22px">
       <!-- chart first -->
       <div v-if="SHOW_MONTH_CHART" class="bg-surface border-2 border-border rounded-22px p-24px">
-        <div class="text-20px font-800 mb-18px">Daily Sales — {{ monthLabel }}</div>
+        <div class="text-20px font-800 mb-18px">Monthly Sales — {{ monthLabel }}</div>
         <div class="flex items-end gap-4px h-170px">
           <div
             v-for="d in daysInMonth"
@@ -376,7 +354,7 @@ const itemsStr = (o: Order) => `${o.items.length} ${o.items.length === 1 ? "item
       </div>
 
       <!-- stat cards below the chart -->
-      <div class="grid grid-cols-1 xl:grid-cols-2 gap-22px items-start">
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-22px items-stretch">
         <SalesSummaryPanel :title="monthLabel" :stats="sales.monthStats" @inspect-method="inspectMethod" />
         <TopSellerCard
           :orders="sales.monthOrders"

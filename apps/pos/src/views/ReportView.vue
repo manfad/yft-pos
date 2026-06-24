@@ -84,7 +84,7 @@ const panels = computed(() => [
   <TopBar mode="report" />
 
   <div class="flex-1 min-h-0 overflow-auto p-24px flex flex-col gap-18px">
-    <div class="text-23px font-800 flex-none">Sales by Item</div>
+    <div class="text-23px font-800 flex-none">Sales Report</div>
 
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-22px items-start">
       <div

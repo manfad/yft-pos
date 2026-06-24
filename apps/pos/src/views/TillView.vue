@@ -41,7 +41,7 @@ const activeTiers = computed(() => {
     .map((t) => ({
       id: t.id,
       qtyText: fmtQtyUnit(t.minQtyMilli, l.item.unit),
-      priceText: `${fmtMoney(t.priceCents)}/${unitLabel(l.item.unit)}`,
+      priceText: fmtMoney(t.priceCents),
       // "hit" = the current quantity has reached this threshold.
       active: l.qtyMilli >= t.minQtyMilli,
     }));
@@ -109,10 +109,9 @@ async function confirm(method: PaymentMethod): Promise<void> {
             :class="t.active ? 'bg-olive text-white border-olive' : 'bg-[#ece6d8] text-muted border-borderSoft'"
             :title="t.active ? 'Bulk price applied' : 'Bulk price available'"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="m6 15 6-6 6 6" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            {{ t.qtyText }} → {{ t.priceText }}
+            {{ t.qtyText }}
+            <span class="font-900" :class="t.active ? 'text-white' : 'text-[#e0a92e]'">=</span>
+            {{ t.priceText }}
           </span>
         </div>
         <div class="flex items-center gap-14px">

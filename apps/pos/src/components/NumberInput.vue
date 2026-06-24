@@ -17,6 +17,8 @@ const props = withDefaults(
     suffix?: string;
     /** Larger, bolder field. */
     big?: boolean;
+    /** Fixed decimal places for the displayed value (e.g. 2 for money). */
+    decimals?: number;
   }>(),
   { title: "Enter value" },
 );
@@ -37,7 +39,7 @@ function onConfirm(v: number): void {
     @click="open = true"
   >
     <span v-if="prefix" class="font-700 text-muted">{{ prefix }}</span>
-    <span class="font-900">{{ modelValue }}</span>
+    <span class="font-900">{{ decimals != null ? modelValue.toFixed(decimals) : modelValue }}</span>
     <span v-if="suffix" class="font-700 text-muted">{{ suffix }}</span>
   </button>
 

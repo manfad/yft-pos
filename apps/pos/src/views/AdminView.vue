@@ -255,7 +255,7 @@ async function saveEdit(): Promise<void> {
                 v-if="editing.image"
                 :src="productImage(editing.image) ?? ''"
                 alt=""
-                class="w-full h-full object-cover"
+                class="w-full h-full object-contain"
               />
               <span v-else class="text-42px font-800 text-muted leading-none">＋</span>
             </button>
@@ -273,7 +273,7 @@ async function saveEdit(): Promise<void> {
               </div>
               <div class="flex flex-col gap-4px text-13px font-700 text-muted">
                 Price
-                <NumberInput v-model="editing.priceRM" title="Item price (RM)" prefix="RM" class="w-130px" />
+                <NumberInput v-model="editing.priceRM" title="Item price (RM)" prefix="RM" :decimals="2" class="w-130px" />
               </div>
             </div>
           </div>
@@ -306,6 +306,7 @@ async function saveEdit(): Promise<void> {
               big
               title="Discount price (RM)"
               prefix="RM"
+              :decimals="2"
               :suffix="`/ ${editing.unit}`"
             />
             <button
