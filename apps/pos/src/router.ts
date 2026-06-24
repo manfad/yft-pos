@@ -7,13 +7,13 @@ export const router = createRouter({
   routes: [
     { path: "/", name: "till", component: () => import("./views/TillView.vue") },
     {
-      path: "/sales",
+      path: "/dashboard",
       name: "sales",
       component: () => import("./views/SalesView.vue"),
-      // Manager-only: blocked unless unlocked via the passcode on the Till.
+      // Manager-only: blocked unless unlocked via the passcode on the Menu.
       beforeEnter: () => (salesUnlocked.value ? true : { path: "/" }),
     },
-    { path: "/admin", name: "admin", component: () => import("./views/AdminView.vue") },
+    { path: "/item", name: "admin", component: () => import("./views/AdminView.vue") },
     { path: "/report", name: "report", component: () => import("./views/ReportView.vue") },
   ],
 });

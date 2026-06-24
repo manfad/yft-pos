@@ -18,9 +18,13 @@ const todayLabel = new Date().toLocaleDateString("en-GB", {
   year: "numeric",
 });
 
-// Left nav button: Menu opens the report (gated); the other pages go to Menu.
+// Left nav (back) button targets per page:
+//   Menu (/)        → Dashboard (gated)
+//   Dashboard, Item → Menu (/)
+//   Report          → Dashboard
 function goLeft(): void {
-  if (props.mode === "till") openSales();
+  if (props.mode === "till") openDashboard();
+  else if (props.mode === "report") router.push("/dashboard");
   else router.push("/");
 }
 
@@ -43,9 +47,9 @@ const passOpen = ref(false);
 const passInput = ref("");
 const passErr = ref(false);
 
-function openSales() {
+function openDashboard() {
   if (salesUnlocked.value) {
-    router.push("/sales");
+    router.push("/dashboard");
     return;
   }
   passInput.value = "";
@@ -56,7 +60,7 @@ function openSales() {
 function submitPass() {
   if (tryUnlock(passInput.value)) {
     passOpen.value = false;
-    router.push("/sales");
+    router.push("/dashboard");
   } else {
     passErr.value = true;
     passInput.value = "";
@@ -74,7 +78,8 @@ function submitPass() {
         class="press flex items-center gap-9px h-54px px-24px rounded-14px border-2 border-border bg-panel text-18px font-800 text-ink cursor-pointer"
         @click="goLeft"
       >
-        <template v-if="mode === 'till'">Report ›</template>
+        <template v-if="mode === 'till'">Dashboard ›</template>
+        <template v-else-if="mode === 'report'">‹ Dashboard</template>
         <template v-else>‹ Menu</template>
       </button>
     </div>
@@ -98,14 +103,14 @@ function submitPass() {
         class="press flex items-center h-54px px-18px rounded-14px border-2 border-border bg-panel text-16px font-800 text-muted cursor-pointer"
         @click="router.push('/report')"
       >
-        📊 Report
+        Report
       </button>
       <button
         v-if="mode === 'sales'"
         class="press flex items-center h-54px px-18px rounded-14px border-2 border-border bg-panel text-16px font-800 text-muted cursor-pointer"
-        @click="router.push('/admin')"
+        @click="router.push('/item')"
       >
-        ⚙ Items
+        Items
       </button>
       <!-- sales/report: clickable date selector; till/admin: today's date -->
       <div v-if="mode === 'sales' || mode === 'report'" class="relative">
