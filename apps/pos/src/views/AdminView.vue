@@ -11,7 +11,7 @@ import {
   type UnitType,
   type Unit,
 } from "@yf/core";
-import { imageCss } from "../productImage";
+import { imageCss, productImage } from "../productImage";
 import { getRepo } from "../db";
 import { useCatalog } from "../stores/catalog";
 import { useUi } from "../stores/ui";
@@ -20,6 +20,7 @@ import TopBar from "../components/TopBar.vue";
 import SelectInput from "../components/SelectInput.vue";
 import TextInput from "../components/TextInput.vue";
 import NumberInput from "../components/NumberInput.vue";
+import ImagePickerDialog from "../components/ImagePickerDialog.vue";
 import { tintFromName } from "../tint";
 
 const catalog = useCatalog();
@@ -41,6 +42,12 @@ interface EditDraft {
   tiers: TierDraft[];
 }
 const editing = ref<EditDraft | null>(null);
+const imagePickerOpen = ref(false);
+
+function onPickImage(key: string): void {
+  if (editing.value) editing.value.image = key;
+  imagePickerOpen.value = false;
+}
 
 // `key` is an internal unique slug (the app references items by id); generate it
 // from the name so cashiers never have to think about it.
@@ -118,6 +125,7 @@ async function saveEdit(): Promise<void> {
         key: `${slugify(d.name)}-${Date.now().toString(36)}`,
         name: d.name.trim(),
         unit: d.unit,
+        image: d.image,
         tint: tintFromName(d.name.trim()),
         priceCents,
       });
@@ -232,6 +240,33 @@ async function saveEdit(): Promise<void> {
           Name
           <TextInput v-model="editing.name" title="Item name" placeholder="e.g. Durian" class="w-full" />
         </label>
+        <div class="flex flex-col gap-4px text-13px font-700 text-muted">
+          Image
+          <div class="flex items-center gap-12px">
+            <!-- when an image is chosen, the image itself is the button -->
+            <button
+              v-if="editing.image"
+              type="button"
+              class="w-72px h-72px flex-none rounded-14px border-2 border-border bg-white overflow-hidden cursor-pointer press"
+              title="Change image"
+              @click="imagePickerOpen = true"
+            >
+              <img :src="productImage(editing.image) ?? ''" alt="" class="w-full h-full object-cover" />
+            </button>
+            <button
+              v-else
+              type="button"
+              class="h-72px px-22px rounded-14px border-2 border-dashed border-border bg-tile text-15px font-800 text-muted cursor-pointer press"
+              @click="imagePickerOpen = true"
+            >Select Image</button>
+            <button
+              v-if="editing.image"
+              type="button"
+              class="text-13px font-700 text-faint underline cursor-pointer"
+              @click="editing.image = ''"
+            >Remove</button>
+          </div>
+        </div>
         <div class="flex gap-12px">
           <div class="flex flex-col gap-4px text-13px font-700 text-muted">
             Unit
@@ -286,4 +321,11 @@ async function saveEdit(): Promise<void> {
       </div>
     </div>
   </div>
+
+  <ImagePickerDialog
+    :open="imagePickerOpen"
+    :current="editing?.image ?? ''"
+    @select="onPickImage"
+    @close="imagePickerOpen = false"
+  />
 </template>

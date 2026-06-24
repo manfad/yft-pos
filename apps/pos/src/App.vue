@@ -3,8 +3,12 @@ import { onMounted } from "vue";
 import { RouterView } from "vue-router";
 import Toast from "./components/Toast.vue";
 import { loadCompanies } from "./place";
+import { loadUserImages } from "./productImage";
 
-onMounted(() => void loadCompanies());
+onMounted(() => {
+  void loadCompanies();
+  void loadUserImages();
+});
 </script>
 
 <template>

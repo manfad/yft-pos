@@ -9,3 +9,9 @@ contextBridge.exposeInMainWorld("sqlite", {
   meta: () => ipcRenderer.invoke("db:meta"),
   reset: () => ipcRenderer.invoke("db:reset"),
 });
+
+// Product image library stored on disk (importable from a USB drive).
+contextBridge.exposeInMainWorld("images", {
+  list: () => ipcRenderer.invoke("images:list"),
+  import: () => ipcRenderer.invoke("images:import"),
+});

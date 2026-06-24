@@ -13,9 +13,17 @@ export interface SqliteBridge {
   reset(): Promise<boolean>;
 }
 
+/** On-disk product image library (Electron only). */
+export interface ImagesBridge {
+  list(): Promise<{ name: string; dataUrl: string }[]>;
+  /** Open a file dialog to copy images in; returns the full updated list. */
+  import(): Promise<{ name: string; dataUrl: string }[]>;
+}
+
 declare global {
   interface Window {
     sqlite?: SqliteBridge;
+    images?: ImagesBridge;
   }
 }
 
