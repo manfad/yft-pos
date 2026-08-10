@@ -50,13 +50,14 @@ async function send(): Promise<void> {
     const company = currentCompany.value;
     const orders = await repo.listOrdersByBusinessDate(date.value, date.value, company.id);
     const catalog = await repo.listItems(true, company.id);
+    const credits = await repo.listCredits(company.id, { outstandingOnly: true });
     await repo.queueEmail({
       companyId: company.id,
       businessDate: date.value,
       subject: dailyEmailSubject(company.name, date.value, false),
       body: dailyEmailBody(company.name, date.value, orders, false),
       attachmentName: `${company.name.replace(/\s+/g, "-")}-sales-${date.value}.xlsx`,
-      attachmentB64: buildDailyExcelB64(orders, catalog),
+      attachmentB64: buildDailyExcelB64(orders, catalog, credits),
     });
 
     // Try to send right now; if offline the outbox keeps retrying by itself.

@@ -82,6 +82,9 @@ ipcMain.handle("images:import", async () => {
       fs.copyFileSync(src, path.join(imagesDir, name));
     }
   }
+  // The native file dialog can reset the window's zoom to 100%; put the
+  // kiosk zoom back before the renderer repaints.
+  mainWindow?.webContents.setZoomFactor(POS_ZOOM_FACTOR);
   return listImages();
 });
 ipcMain.handle("db:reset", () => {

@@ -3,85 +3,62 @@ import {
   aggregateItemSales,
   computeStats,
   fmtMoney,
+  fmtQtyUnit,
+  localDateStr,
   PAYMENT_METHODS,
   toQty,
   toRM,
+  type Credit,
   type Item,
   type Order,
 } from "@yf/core";
 
 /** Increment when HQ changes the stable workbook contract. */
-export const DAILY_WORKBOOK_TEMPLATE_VERSION = 1;
-export const HQ_DAILY_HEADERS = [
-  "Name",
-  "Date",
-  "Inv No",
-  "Pay Type",
-  "Amount",
-  "Credit",
-  "Fish Qty",
-  "Fish Qty (Ekor)",
-  "Chicken Qty (Ekor)",
-  "Remarks",
-] as const;
-export const INVOICE_ITEM_HEADERS = [
-  "Name",
-  "Date",
-  "Time",
-  "Inv No",
-  "Pay Type",
-  "Item",
-  "Unit",
-  "Qty",
-  "Ekor",
-  "Unit Price",
-  "Line Amount",
-  "Credit",
-  "Remarks",
-] as const;
-export const SALES_EXPORT_HEADERS = [
-  "Date",
-  "Time",
-  "Receipt No",
-  "Amount",
-  "Fish Qty",
-  "Tail (Fish)",
-  "Tail (Chicken)",
-  "Pay Type",
-] as const;
+export const DAILY_WORKBOOK_TEMPLATE_VERSION = 2;
+
+// v2 sheet set (mirrors demo-output/hq-daily-4sheet-demo.xlsx):
+//   Sales List — one row per sale, amount split into Cash/Credit columns
+//   Today Sales — per-item totals (qty merged with unit) + payment breakdown
+//   Fish Sales — one row per sale containing fish; qty is the ekor count
+//   Sales Detail — every sale as its own block, voided ones marked
+//   Credit — today's credit sales, then the full outstanding ledger
+export const SALES_LIST_HEADERS = ["Name", "Date", "Inv No", "Pay Type", "Cash", "Credit"] as const;
+export const TODAY_SALES_HEADERS = ["Item", "Unit Price (RM)", "Qty", "Amount (RM)"] as const;
+export const FISH_SALES_HEADERS = ["Inv No", "Pay Type", "Cash", "Credit", "Fish Qty (Ekor)"] as const;
+export const CREDIT_HEADERS = ["Date", "Inv No", "Name", "Amount (RM)"] as const;
 
 const validOrders = (orders: Order[]): Order[] =>
   [...orders].filter((order) => order.voidedAt == null).sort((a, b) => a.ts - b.ts);
 
 const isChicken = (name: string): boolean => /\b(ayam|chicken|hen|rooster)\b/i.test(name);
 
-function animalTotals(order: Order): { fishQty: number; fish: number; chicken: number } {
-  let fishQty = 0;
-  let fish = 0;
-  let chicken = 0;
+/**
+ * Fish head count ("ekor") on an order. The catalogue's only tail-tracking
+ * items are fish and chicken, so a non-chicken tail line counts as fish — this
+ * survives renamed/deleted items because it reads the line snapshot only.
+ */
+const fishEkor = (order: Order): number => {
+  let ekor = 0;
   for (const line of order.items) {
-    if (line.tailCount <= 0) continue;
-    // The current tail-tracking catalogue contains fish and chicken. Treat a
-    // non-chicken tail item as fish so older/deleted fish snapshots still land
-    // in a stable column without relying on the live catalogue.
-    if (isChicken(line.name)) chicken += line.tailCount;
-    else {
-      fish += line.tailCount;
-      fishQty += toQty(line.qtyMilli);
-    }
+    if (line.tailCount > 0 && !isChicken(line.name)) ekor += line.tailCount;
   }
-  return { fishQty, fish, chicken };
-}
+  return ekor;
+};
+
+/** Cash/Credit split: a Credit sale leaves Cash empty and vice versa. */
+const cashCredit = (order: Order): [number | string, number | string] =>
+  order.method === "Credit" ? ["", toRM(order.totalCents)] : [toRM(order.totalCents), ""];
 
 function setFormulaOrZero(
   sheet: XLSX.WorkSheet,
   cell: string,
   column: string,
+  firstDataRow: number,
   dataRows: number,
   format = "0.00",
 ): void {
   sheet[cell] = dataRows > 0
-    ? { t: "n", f: `SUM(${column}2:${column}${dataRows + 1})`, z: format }
+    ? { t: "n", f: `SUM(${column}${firstDataRow}:${column}${firstDataRow + dataRows - 1})`, z: format }
     : { t: "n", v: 0, z: format };
 }
 
@@ -98,173 +75,193 @@ function setNumberFormat(
   }
 }
 
-/** Task 5 — the exact daily invoice template sent to HQ. */
-function hqDailySheet(orders: Order[]): XLSX.WorkSheet {
+/** Sheet 1 — every sale on one row, amount split into Cash/Credit columns. */
+function salesListSheet(orders: Order[]): XLSX.WorkSheet {
   const sales = validOrders(orders);
   const rows: (string | number)[][] = sales.map((order) => {
-    const animal = animalTotals(order);
+    const [cash, credit] = cashCredit(order);
     return [
       order.method === "Credit" ? (order.creditorName ?? "") : "",
       order.businessDate,
       order.id,
       order.method,
-      toRM(order.totalCents),
-      order.method === "Credit" ? toRM(order.totalCents) : "",
-      animal.fishQty,
-      animal.fish,
-      animal.chicken,
-      "",
+      cash,
+      credit,
     ];
   });
   const totalRow = sales.length + 2;
   const sheet = XLSX.utils.aoa_to_sheet([
-    [...HQ_DAILY_HEADERS],
+    [...SALES_LIST_HEADERS],
     ...rows,
-    ["TOTAL", "", "", "", 0, 0, 0, 0, 0, ""],
+    ["TOTAL", "", "", "", 0, 0],
   ]);
-  setFormulaOrZero(sheet, `E${totalRow}`, "E", sales.length);
-  setFormulaOrZero(sheet, `F${totalRow}`, "F", sales.length);
-  setFormulaOrZero(sheet, `G${totalRow}`, "G", sales.length, "0.###");
-  setFormulaOrZero(sheet, `H${totalRow}`, "H", sales.length, "0");
-  setFormulaOrZero(sheet, `I${totalRow}`, "I", sales.length, "0");
+  setFormulaOrZero(sheet, `E${totalRow}`, "E", 2, sales.length);
+  setFormulaOrZero(sheet, `F${totalRow}`, "F", 2, sales.length);
   setNumberFormat(sheet, 4, 1, totalRow - 1, "0.00");
   setNumberFormat(sheet, 5, 1, totalRow - 1, "0.00");
-  setNumberFormat(sheet, 6, 1, totalRow - 1, "0.###");
-  setNumberFormat(sheet, 7, 1, totalRow - 1, "0");
-  setNumberFormat(sheet, 8, 1, totalRow - 1, "0");
   sheet["!cols"] = [
-    { wch: 24 }, { wch: 13 }, { wch: 11 }, { wch: 12 },
-    { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 17 },
-    { wch: 20 }, { wch: 28 },
+    { wch: 24 }, { wch: 13 }, { wch: 11 }, { wch: 12 }, { wch: 14 }, { wch: 14 },
   ];
-  sheet["!autofilter"] = { ref: `A1:J${Math.max(1, sales.length + 1)}` };
+  sheet["!autofilter"] = { ref: `A1:F${Math.max(1, sales.length + 1)}` };
   return sheet;
 }
 
-/** Full item-level audit trail so HQ can inspect every non-fish quantity too. */
-function invoiceItemsSheet(orders: Order[]): XLSX.WorkSheet {
-  const sales = validOrders(orders);
-  const rows: (string | number)[][] = [];
-  for (const order of sales) {
-    const time = new Date(order.ts).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-    for (const line of order.items) {
-      rows.push([
-        order.method === "Credit" ? (order.creditorName ?? "") : "",
-        order.businessDate,
-        time,
-        order.id,
-        order.method,
-        line.name,
-        line.unit,
-        toQty(line.qtyMilli),
-        line.tailCount || "",
-        toRM(line.priceCents),
-        toRM(line.amountCents),
-        order.method === "Credit" ? toRM(line.amountCents) : "",
-        "",
-      ]);
-    }
-  }
-  const totalRow = rows.length + 2;
-  const sheet = XLSX.utils.aoa_to_sheet([
-    [...INVOICE_ITEM_HEADERS],
-    ...rows,
-    ["TOTAL", "", "", "", "", "", "", 0, 0, "", 0, 0, ""],
-  ]);
-  setFormulaOrZero(sheet, `H${totalRow}`, "H", rows.length, "0.###");
-  setFormulaOrZero(sheet, `I${totalRow}`, "I", rows.length, "0");
-  setFormulaOrZero(sheet, `K${totalRow}`, "K", rows.length);
-  setFormulaOrZero(sheet, `L${totalRow}`, "L", rows.length);
-  setNumberFormat(sheet, 7, 1, totalRow - 1, "0.###");
-  setNumberFormat(sheet, 8, 1, totalRow - 1, "0");
-  for (const column of [9, 10, 11]) setNumberFormat(sheet, column, 1, totalRow - 1, "0.00");
-  sheet["!cols"] = [
-    { wch: 24 }, { wch: 13 }, { wch: 9 }, { wch: 11 }, { wch: 12 },
-    { wch: 28 }, { wch: 10 }, { wch: 11 }, { wch: 9 }, { wch: 13 },
-    { wch: 14 }, { wch: 14 }, { wch: 28 },
-  ];
-  sheet["!autofilter"] = { ref: `A1:M${Math.max(1, rows.length + 1)}` };
-  return sheet;
-}
-
-/** Task 4 — compact one-row-per-receipt spreadsheet export. */
-function salesExportSheet(orders: Order[]): XLSX.WorkSheet {
-  const sales = validOrders(orders);
-  const rows: (string | number)[][] = sales.map((order) => {
-    const tail = animalTotals(order);
-    return [
-      order.businessDate,
-      new Date(order.ts).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
-      order.id,
-      toRM(order.totalCents),
-      tail.fishQty,
-      tail.fish,
-      tail.chicken,
-      order.method,
-    ];
-  });
-  const totalRow = sales.length + 2;
-  const sheet = XLSX.utils.aoa_to_sheet([
-    [...SALES_EXPORT_HEADERS],
-    ...rows,
-    ["TOTAL", "", "", 0, 0, 0, 0, ""],
-  ]);
-  setFormulaOrZero(sheet, `D${totalRow}`, "D", sales.length);
-  setFormulaOrZero(sheet, `E${totalRow}`, "E", sales.length, "0.###");
-  setFormulaOrZero(sheet, `F${totalRow}`, "F", sales.length, "0");
-  setFormulaOrZero(sheet, `G${totalRow}`, "G", sales.length, "0");
-  setNumberFormat(sheet, 3, 1, totalRow - 1, "0.00");
-  setNumberFormat(sheet, 4, 1, totalRow - 1, "0.###");
-  setNumberFormat(sheet, 5, 1, totalRow - 1, "0");
-  setNumberFormat(sheet, 6, 1, totalRow - 1, "0");
-  sheet["!cols"] = [
-    { wch: 13 }, { wch: 9 }, { wch: 12 }, { wch: 14 },
-    { wch: 11 }, { wch: 13 }, { wch: 16 }, { wch: 12 },
-  ];
-  sheet["!autofilter"] = { ref: `A1:H${Math.max(1, sales.length + 1)}` };
-  return sheet;
-}
-
-/** Per-item and payment totals retained as a useful reconciliation sheet. */
-function totalsSheet(orders: Order[]): XLSX.WorkSheet {
+/** Sheet 2 — per-item totals (qty merged with its unit) + payment breakdown. */
+function todaySalesSheet(orders: Order[]): XLSX.WorkSheet {
   const sales = aggregateItemSales(orders);
   const stats = computeStats(orders, "today");
   const voided = orders.filter((order) => order.voidedAt != null);
-  const rows: (string | number)[][] = [["Item", "Ekor", "Qty", "Amount (RM)"]];
+  const rows: (string | number)[][] = [[...TODAY_SALES_HEADERS]];
   for (const sale of sales) {
-    rows.push([sale.name, sale.tailCount || "", toQty(sale.qtyMilli), toRM(sale.amountCents)]);
+    const qty = toQty(sale.qtyMilli);
+    rows.push([
+      sale.name,
+      qty > 0 ? toRM(Math.round(sale.amountCents / qty)) : "",
+      fmtQtyUnit(sale.qtyMilli, sale.unit),
+      toRM(sale.amountCents),
+    ]);
   }
+  const totalRowIndex = rows.length + 1; // 1-based sheet row of the TOTAL line
+  rows.push(["TOTAL", "", "", 0]);
   rows.push([]);
+  rows.push(["BY PAYMENT"]);
   for (const method of PAYMENT_METHODS) {
     const bucket = stats.byMethod[method];
-    rows.push([`${method} sales`, "", bucket.count, toRM(bucket.totalCents)]);
+    if (bucket.count) rows.push([`${method} (${bucket.count})`, "", "", toRM(bucket.totalCents)]);
   }
-  rows.push([]);
-  rows.push(["Voided sales", "", voided.length, toRM(voided.reduce((sum, order) => sum + order.totalCents, 0))]);
-  rows.push(["TOTAL", "", stats.count, toRM(stats.totalCents)]);
+  if (voided.length) {
+    rows.push([
+      `Voided: ${voided.length} sale(s)`,
+      "",
+      "",
+      toRM(voided.reduce((sum, order) => sum + order.totalCents, 0)),
+    ]);
+  }
+  rows.push([`${stats.count} sale(s), ${voided.length} voided`]);
   const sheet = XLSX.utils.aoa_to_sheet(rows);
-  sheet["!cols"] = [{ wch: 28 }, { wch: 11 }, { wch: 14 }, { wch: 16 }];
+  setFormulaOrZero(sheet, `D${totalRowIndex}`, "D", 2, sales.length);
+  setNumberFormat(sheet, 1, 1, totalRowIndex - 1, "0.00");
+  setNumberFormat(sheet, 3, 1, rows.length, "0.00");
+  sheet["!cols"] = [{ wch: 26 }, { wch: 15 }, { wch: 13 }, { wch: 14 }];
+  return sheet;
+}
+
+/** Sheet 3 — one row per sale containing fish; the qty column is ekor. */
+function fishSalesSheet(orders: Order[]): XLSX.WorkSheet {
+  const sales = validOrders(orders).filter((order) => fishEkor(order) > 0);
+  const rows: (string | number)[][] = sales.map((order) => {
+    const [cash, credit] = cashCredit(order);
+    return [order.id, order.method, cash, credit, fishEkor(order)];
+  });
+  const totalRow = sales.length + 2;
+  const sheet = XLSX.utils.aoa_to_sheet([
+    [...FISH_SALES_HEADERS],
+    ...rows,
+    ["TOTAL", "", 0, 0, 0],
+  ]);
+  setFormulaOrZero(sheet, `C${totalRow}`, "C", 2, sales.length);
+  setFormulaOrZero(sheet, `D${totalRow}`, "D", 2, sales.length);
+  setFormulaOrZero(sheet, `E${totalRow}`, "E", 2, sales.length, "0");
+  setNumberFormat(sheet, 2, 1, totalRow - 1, "0.00");
+  setNumberFormat(sheet, 3, 1, totalRow - 1, "0.00");
+  setNumberFormat(sheet, 4, 1, totalRow - 1, "0");
+  sheet["!cols"] = [{ wch: 11 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
+  sheet["!autofilter"] = { ref: `A1:E${Math.max(1, sales.length + 1)}` };
+  return sheet;
+}
+
+/** Sheet 4 — every sale (voided included, marked) as its own block. */
+function salesDetailSheet(orders: Order[]): XLSX.WorkSheet {
+  const all = [...orders].sort((a, b) => a.ts - b.ts);
+  const rows: (string | number)[][] = [];
+  for (const order of all) {
+    const time = new Date(order.ts).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    const voided = order.voidedAt != null;
+    rows.push([
+      `Inv #${order.id}${order.creditorName ? ` — ${order.creditorName}` : ""}`,
+      time,
+      order.method,
+      voided ? "VOIDED" : "",
+    ]);
+    rows.push(["Item", "Qty", "Price (RM)", "Amount (RM)"]);
+    for (const line of order.items) {
+      rows.push([
+        line.tailCount && line.unit !== "each" ? `${line.name} (${line.tailCount} ekor)` : line.name,
+        fmtQtyUnit(line.qtyMilli, line.unit),
+        toRM(line.priceCents),
+        toRM(line.amountCents),
+      ]);
+    }
+    rows.push(["TOTAL", "", "", toRM(order.totalCents)]);
+    rows.push([]);
+  }
+  const sheet = XLSX.utils.aoa_to_sheet(rows.length ? rows : [["No sales."]]);
+  setNumberFormat(sheet, 2, 0, rows.length, "0.00");
+  setNumberFormat(sheet, 3, 0, rows.length, "0.00");
+  sheet["!cols"] = [{ wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
+  return sheet;
+}
+
+/** Sheet 5 — today's credit sales, then every outstanding credit. */
+function creditSheet(orders: Order[], outstanding: Credit[]): XLSX.WorkSheet {
+  const businessDate = orders[0]?.businessDate ?? localDateStr(Date.now());
+  const today = validOrders(orders).filter((order) => order.method === "Credit");
+  const rows: (string | number)[][] = [[`ADDED TODAY — ${businessDate}`]];
+  rows.push([...CREDIT_HEADERS]);
+  const todayFirst = rows.length + 1;
+  for (const order of today) {
+    rows.push([order.businessDate, order.id, order.creditorName ?? "", toRM(order.totalCents)]);
+  }
+  rows.push(["TOTAL", "", "", 0]);
+  const todayTotal = rows.length;
+  rows.push([]);
+  rows.push(["ALL OUTSTANDING"]);
+  rows.push([...CREDIT_HEADERS]);
+  const outFirst = rows.length + 1;
+  const sorted = [...outstanding].sort((a, b) => b.date - a.date || b.orderId - a.orderId);
+  for (const credit of sorted) {
+    rows.push([localDateStr(credit.date), credit.orderId, credit.name, toRM(credit.amountCents)]);
+  }
+  rows.push(["TOTAL", "", "", 0]);
+  const outTotal = rows.length;
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  setFormulaOrZero(sheet, `D${todayTotal}`, "D", todayFirst, today.length);
+  setFormulaOrZero(sheet, `D${outTotal}`, "D", outFirst, sorted.length);
+  setNumberFormat(sheet, 3, 0, rows.length, "0.00");
+  sheet["!cols"] = [{ wch: 13 }, { wch: 11 }, { wch: 24 }, { wch: 14 }];
   return sheet;
 }
 
 /** Build the stable, versioned daily workbook used by Export and Close Day. */
-export function buildDailyWorkbook(orders: Order[], _catalog: Item[] = []): XLSX.WorkBook {
+export function buildDailyWorkbook(
+  orders: Order[],
+  _catalog: Item[] = [],
+  outstandingCredits: Credit[] = [],
+): XLSX.WorkBook {
   const workbook = XLSX.utils.book_new();
   workbook.Props = {
     Title: "Daily sales report",
     Subject: `HQ daily workbook template v${DAILY_WORKBOOK_TEMPLATE_VERSION}`,
     Author: "Yun Fook POS",
   };
-  XLSX.utils.book_append_sheet(workbook, hqDailySheet(orders), "HQ Daily");
-  XLSX.utils.book_append_sheet(workbook, invoiceItemsSheet(orders), "Invoice Items");
-  XLSX.utils.book_append_sheet(workbook, salesExportSheet(orders), "Sales Export");
-  XLSX.utils.book_append_sheet(workbook, totalsSheet(orders), "Totals");
+  XLSX.utils.book_append_sheet(workbook, salesListSheet(orders), "Sales List");
+  XLSX.utils.book_append_sheet(workbook, todaySalesSheet(orders), "Today Sales");
+  XLSX.utils.book_append_sheet(workbook, fishSalesSheet(orders), "Fish Sales");
+  XLSX.utils.book_append_sheet(workbook, salesDetailSheet(orders), "Sales Detail");
+  XLSX.utils.book_append_sheet(workbook, creditSheet(orders, outstandingCredits), "Credit");
   return workbook;
 }
 
 /** The daily workbook as base64 (stored on the outbox row, attached by main). */
-export function buildDailyExcelB64(orders: Order[], catalog: Item[] = []): string {
-  return XLSX.write(buildDailyWorkbook(orders, catalog), { type: "base64", bookType: "xlsx" }) as string;
+export function buildDailyExcelB64(
+  orders: Order[],
+  catalog: Item[] = [],
+  outstandingCredits: Credit[] = [],
+): string {
+  return XLSX.write(buildDailyWorkbook(orders, catalog, outstandingCredits), {
+    type: "base64",
+    bookType: "xlsx",
+  }) as string;
 }
 
 /** Download the same workbook from Chrome or Electron's renderer. */

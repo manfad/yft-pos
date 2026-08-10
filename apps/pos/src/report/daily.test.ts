@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
-import type { Order, OrderLine } from "@yf/core";
+import type { Credit, Order, OrderLine } from "@yf/core";
 import {
   buildDailyExcelB64,
   buildDailyWorkbook,
-  HQ_DAILY_HEADERS,
-  INVOICE_ITEM_HEADERS,
-  SALES_EXPORT_HEADERS,
+  CREDIT_HEADERS,
+  FISH_SALES_HEADERS,
+  SALES_LIST_HEADERS,
+  TODAY_SALES_HEADERS,
 } from "./daily";
 
 const line = (partial: Partial<OrderLine> & Pick<OrderLine, "name" | "qtyMilli" | "amountCents">): OrderLine => ({
@@ -46,7 +47,7 @@ const orders: Order[] = [
     creditorName: "Pak Abu",
     totalCents: 1200,
     voidedAt: null,
-    items: [line({ name: "Ayam", unit: "each", qtyMilli: 1000, tailCount: 2, priceCents: 1200, amountCents: 1200 })],
+    items: [line({ id: 3, itemId: 3, name: "Ayam", unit: "each", qtyMilli: 1000, tailCount: 2, priceCents: 1200, amountCents: 1200 })],
   },
   {
     id: 103,
@@ -60,49 +61,91 @@ const orders: Order[] = [
   },
 ];
 
+const outstanding: Credit[] = [
+  {
+    id: 1,
+    companyId: 1,
+    orderId: 95,
+    name: "Restoran Selera",
+    amountCents: 24000,
+    date: new Date("2026-08-07T12:00:00+08:00").getTime(),
+    clearedAt: null,
+  },
+];
+
 const rowsOf = (workbook: XLSX.WorkBook, name: string): unknown[][] =>
   XLSX.utils.sheet_to_json(workbook.Sheets[name]!, { header: 1, raw: true, defval: "" });
 
-describe("daily Excel workbook", () => {
-  it("creates detailed HQ, item, compact export, and totals sheets", () => {
+describe("daily Excel workbook (template v2)", () => {
+  it("creates the five demo-matching sheets", () => {
+    const workbook = buildDailyWorkbook(orders, [], outstanding);
+    expect(workbook.SheetNames).toEqual([
+      "Sales List",
+      "Today Sales",
+      "Fish Sales",
+      "Sales Detail",
+      "Credit",
+    ]);
+  });
+
+  it("splits each sale into Cash/Credit on the Sales List", () => {
     const workbook = buildDailyWorkbook(orders);
-    expect(workbook.SheetNames).toEqual(["HQ Daily", "Invoice Items", "Sales Export", "Totals"]);
+    const list = rowsOf(workbook, "Sales List");
+    expect(list[0]).toEqual([...SALES_LIST_HEADERS]);
+    expect(list[1]).toEqual(["", "2026-08-10", 101, "Cash", 69.3, ""]);
+    expect(list[2]).toEqual(["Pak Abu", "2026-08-10", 102, "Credit", "", 12]);
+    expect(list.flat()).not.toContain(103); // voided sale excluded
+    expect(workbook.Sheets["Sales List"]!["E4"]?.f).toBe("SUM(E2:E3)");
+    expect(workbook.Sheets["Sales List"]!["F4"]?.f).toBe("SUM(F2:F3)");
+  });
 
-    const hq = rowsOf(workbook, "HQ Daily");
-    expect(hq[0]).toEqual([...HQ_DAILY_HEADERS]);
-    expect(hq[1]).toEqual(["", "2026-08-10", 101, "Cash", 69.3, "", 2.5, 3, 0, ""]);
-    expect(hq[2]).toEqual(["Pak Abu", "2026-08-10", 102, "Credit", 12, 12, 0, 0, 2, ""]);
-    expect(workbook.Sheets["HQ Daily"]!["E4"]?.f).toBe("SUM(E2:E3)");
-    expect(workbook.Sheets["HQ Daily"]!["F4"]?.f).toBe("SUM(F2:F3)");
-    expect(workbook.Sheets["HQ Daily"]!["H4"]?.f).toBe("SUM(H2:H3)");
+  it("merges qty with its unit on Today Sales", () => {
+    const workbook = buildDailyWorkbook(orders);
+    const today = rowsOf(workbook, "Today Sales");
+    expect(today[0]).toEqual([...TODAY_SALES_HEADERS]);
+    expect(today[1]).toEqual(["Ikan Tilapia", 25, "2.5 kg", 62.5]);
+    expect(workbook.Sheets["Today Sales"]!["D5"]?.f).toBe("SUM(D2:D4)");
+    const flat = today.flat();
+    expect(flat).toContain("Cash (1)");
+    expect(flat).toContain("Credit (1)");
+    expect(flat).toContain("Voided: 1 sale(s)");
+  });
 
-    const detail = rowsOf(workbook, "Invoice Items");
-    expect(detail[0]).toEqual([...INVOICE_ITEM_HEADERS]);
-    expect(detail).toHaveLength(5); // header + 3 valid item lines + total
-    expect(detail[2]?.slice(0, 8)).toEqual(["", "2026-08-10", expect.any(String), 101, "Cash", "Fresh Milk", "bottle", 1]);
-    expect(detail[3]?.slice(0, 6)).toEqual(["Pak Abu", "2026-08-10", expect.any(String), 102, "Credit", "Ayam"]);
+  it("lists only fish sales with the ekor count as qty", () => {
+    const workbook = buildDailyWorkbook(orders);
+    const fish = rowsOf(workbook, "Fish Sales");
+    expect(fish[0]).toEqual([...FISH_SALES_HEADERS]);
+    // order 101 has tilapia (3 ekor) — full invoice amount in Cash.
+    expect(fish[1]).toEqual([101, "Cash", 69.3, "", 3]);
+    // order 102 is chicken-only, order 103 is voided — neither appears.
+    expect(fish).toHaveLength(3); // header + one fish sale + total
+    expect(workbook.Sheets["Fish Sales"]!["E3"]?.f).toBe("SUM(E2:E2)");
+  });
 
-    const compact = rowsOf(workbook, "Sales Export");
-    expect(compact[0]).toEqual([...SALES_EXPORT_HEADERS]);
-    expect(compact[1]).toEqual(["2026-08-10", expect.any(String), 101, 69.3, 2.5, 3, 0, "Cash"]);
-    expect(compact[2]).toEqual(["2026-08-10", expect.any(String), 102, 12, 0, 0, 2, "Credit"]);
-    expect(compact.flat()).not.toContain(103);
+  it("stacks today's credit sales above the outstanding ledger", () => {
+    const workbook = buildDailyWorkbook(orders, [], outstanding);
+    const credit = rowsOf(workbook, "Credit");
+    expect(credit[0]?.[0]).toBe("ADDED TODAY — 2026-08-10");
+    expect(credit[1]).toEqual([...CREDIT_HEADERS]);
+    expect(credit[2]).toEqual(["2026-08-10", 102, "Pak Abu", 12]);
+    expect(credit[5]?.[0]).toBe("ALL OUTSTANDING");
+    expect(credit[7]).toEqual(["2026-08-07", 95, "Restoran Selera", 240]);
   });
 
   it("writes a valid xlsx attachment", () => {
     const workbook = XLSX.read(buildDailyExcelB64(orders), { type: "base64" });
-    expect(workbook.SheetNames).toContain("HQ Daily");
-    expect(rowsOf(workbook, "Invoice Items")[1]?.[5]).toBe("Ikan Tilapia");
+    expect(workbook.SheetNames).toContain("Sales List");
+    expect(rowsOf(workbook, "Sales Detail").flat()).toContain("Inv #102 — Pak Abu");
   });
 
   it("keeps an empty-sales workbook usable with zero footer totals", () => {
     const workbook = buildDailyWorkbook([]);
-    const hq = workbook.Sheets["HQ Daily"]!;
-    expect(rowsOf(workbook, "HQ Daily")).toEqual([
-      [...HQ_DAILY_HEADERS],
-      ["TOTAL", "", "", "", 0, 0, 0, 0, 0, ""],
+    const list = workbook.Sheets["Sales List"]!;
+    expect(rowsOf(workbook, "Sales List")).toEqual([
+      [...SALES_LIST_HEADERS],
+      ["TOTAL", "", "", "", 0, 0],
     ]);
-    expect(hq["E2"]?.v).toBe(0);
-    expect(hq["E2"]?.f).toBeUndefined();
+    expect(list["E2"]?.v).toBe(0);
+    expect(list["E2"]?.f).toBeUndefined();
   });
 });

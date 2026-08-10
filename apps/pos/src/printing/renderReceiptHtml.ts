@@ -108,7 +108,7 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
     gap: 0.6mm;
     overflow-wrap: anywhere;
   }
-  .item-name { font-weight: 800; }
+  .item-name { font-size: 7pt; font-weight: 400; }
   .item-rate {
     color: #333;
     font-size: 6.7pt;

@@ -38,6 +38,7 @@ async function queueDailyEmail(
 ): Promise<DailyReportDelivery> {
   const repo = await getRepo();
   const catalog = await repo.listItems(true, companyId);
+  const credits = await repo.listCredits(companyId, { outstandingOnly: true });
   // A Close Day artifact has its own stable name so an earlier manual export/
   // email cannot suppress the final end-of-day workbook.
   const attachmentName = `${companyName.replace(/\s+/g, "-")}-close-day-${businessDate}.xlsx`;
@@ -51,7 +52,7 @@ async function queueDailyEmail(
       subject: dailyEmailSubject(companyName, businessDate, auto),
       body: dailyEmailBody(companyName, businessDate, orders, auto),
       attachmentName,
-      attachmentB64: buildDailyExcelB64(orders, catalog),
+      attachmentB64: buildDailyExcelB64(orders, catalog, credits),
     });
   } else if (existing.sentAt != null) {
     return "sent";
