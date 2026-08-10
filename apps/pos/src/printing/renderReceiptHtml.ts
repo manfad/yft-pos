@@ -4,7 +4,7 @@ import type { Receipt } from "@yf/core";
 // roll. Printed via the OS print pipeline, so any driver-installed printer works
 // (and a normal A4 printer too, for testing before the thermal unit arrives).
 
-export const PAPER_WIDTH_MM = 80;
+export const PAPER_WIDTH_MM = 80; // default; overridable per print via settings
 
 const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -16,7 +16,7 @@ const amt = (s: string): string => {
   return esc(i < 0 ? s : s.slice(i + 1));
 };
 
-export function renderReceiptHtml(r: Receipt): string {
+export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM): string {
   const rows = r.lines
     .map(
       (l) => `
@@ -39,11 +39,11 @@ export function renderReceiptHtml(r: Receipt): string {
 <meta charset="utf-8" />
 <title>Receipt #${r.orderId}</title>
 <style>
-  @page { size: ${PAPER_WIDTH_MM}mm auto; margin: 0; }
+  @page { size: ${widthMm}mm auto; margin: 0; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
-    width: ${PAPER_WIDTH_MM}mm;
+    width: ${widthMm}mm;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     font-variant-numeric: tabular-nums;
     color: #000;
@@ -76,7 +76,7 @@ export function renderReceiptHtml(r: Receipt): string {
   }
   .table-head {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 9mm 22mm;
+    grid-template-columns: minmax(0, 1fr) 13mm 22mm;
     gap: 2.5mm;
     font-size: 6.8pt;
     font-weight: 400;
@@ -87,7 +87,7 @@ export function renderReceiptHtml(r: Receipt): string {
   .table-head .h-amt { text-align: right; }
   .item-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 9mm 22mm;
+    grid-template-columns: minmax(0, 1fr) 13mm 22mm;
     gap: 2.5mm;
     align-items: baseline;
   }

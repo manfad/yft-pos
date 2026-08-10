@@ -45,7 +45,9 @@ export function generateDemoOrders(
         });
       }
       const totalCents = lines.reduce((a, l) => a + l.amountCents, 0);
-      const method = PAYMENT_METHODS[rnd(0, PAYMENT_METHODS.length - 1)]!;
+      // Demo sales are settled at the till; Credit needs a real creditor, so skip it.
+      const methods = PAYMENT_METHODS.filter((m) => m !== "Credit");
+      const method = methods[rnd(0, methods.length - 1)]!;
       drafts.push({ ts, method, totalCents, lines });
     }
   }

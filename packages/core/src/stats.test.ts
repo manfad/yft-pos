@@ -3,12 +3,12 @@ import { periodRange, computeStats, aggregateItemSales } from "./stats.js";
 import type { Order, OrderLine } from "./types.js";
 
 const mk = (ts: number, method: Order["method"], totalCents: number): Order => ({
-  id: ts, companyId: 1, ts, method, totalCents, items: [],
+  id: ts, companyId: 1, ts, businessDate: "2026-06-19", method, totalCents, items: [], voidedAt: null,
 });
 
 const line = (over: Partial<OrderLine>): OrderLine => ({
   id: 1, itemId: 1, name: "Milk", image: "", unit: "box",
-  tint: "#000", priceCents: 650, qtyMilli: 1000, amountCents: 650, bulkPrice: false, ...over,
+  tint: "#000", priceCents: 650, qtyMilli: 1000, amountCents: 650, tailCount: 0, bulkPrice: false, ...over,
 });
 
 describe("periodRange", () => {

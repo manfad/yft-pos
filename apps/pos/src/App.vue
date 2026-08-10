@@ -4,10 +4,21 @@ import { RouterView } from "vue-router";
 import Toast from "./components/Toast.vue";
 import { loadCompanies } from "./place";
 import { loadUserImages } from "./productImage";
+import { autoCloseUnclosedDays } from "./business";
+import { useUi } from "./stores/ui";
+
+const ui = useUi();
 
 onMounted(() => {
   void loadCompanies();
   void loadUserImages();
+  // Forgot-to-close fallback: close past days automatically and email HQ.
+  void autoCloseUnclosedDays()
+    .then((dates) => {
+      if (dates.length === 1) ui.showToast(`Closed ${dates[0]} automatically — report sent to HQ`);
+      else if (dates.length > 1) ui.showToast(`Closed ${dates.length} past days automatically`);
+    })
+    .catch(() => {});
 });
 </script>
 

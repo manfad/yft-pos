@@ -4,12 +4,12 @@ import type { PricedItem } from "./types.js";
 
 const fish: PricedItem = {
   id: 1, companyId: 1, key: "talapia", name: "Talapia", image: "", unit: "kg",
-  tint: "#000", priceCents: 1800, active: true,
+  tint: "#000", priceCents: 1800, active: true, tracksTail: true,
   tiers: [{ id: 1, itemId: 1, minQtyMilli: 30000, priceCents: 1500 }],
 };
 const rice: PricedItem = {
   id: 2, companyId: 1, key: "rice", name: "Rice", image: "", unit: "kg",
-  tint: "#000", priceCents: 350, active: true, tiers: [],
+  tint: "#000", priceCents: 350, active: true, tracksTail: false, tiers: [],
 };
 const byId = new Map([[1, fish], [2, rice]]);
 const resolve = (l: { itemId?: number }) => (l.itemId != null ? byId.get(l.itemId) ?? null : null);
@@ -53,5 +53,16 @@ describe("buildOrder", () => {
     expect(() => buildOrder({ method: "QR", lines: [{ itemId: 2, qtyMilli: 0 }] }, resolve)).toThrow(
       /qty must be > 0/,
     );
+  });
+
+  it("requires a creditor name for Credit, and carries it onto the draft", () => {
+    expect(() =>
+      buildOrder({ method: "Credit", lines: [{ itemId: 2, qtyMilli: 1000 }] }, resolve),
+    ).toThrow(/creditor name is required/);
+    const draft = buildOrder(
+      { method: "Credit", creditorName: "  Pak Abu  ", lines: [{ itemId: 2, qtyMilli: 1000 }] },
+      resolve,
+    );
+    expect(draft).toMatchObject({ method: "Credit", creditorName: "Pak Abu" });
   });
 });

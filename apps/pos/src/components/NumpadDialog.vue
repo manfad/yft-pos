@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 
 const props = defineProps<{
   open: boolean;
@@ -52,6 +52,25 @@ function clearAll(): void {
 function ok(): void {
   emit("confirm", Number(entry.value) || 0);
 }
+
+// Hardware keyboard / USB numpad support: digits and "." type, Backspace
+// deletes, Enter confirms, Escape cancels.
+function onKeydown(e: KeyboardEvent): void {
+  if (/^[0-9.]$/.test(e.key)) tap(e.key === "." ? "." : e.key);
+  else if (e.key === "Backspace") tap("⌫");
+  else if (e.key === "Enter") ok();
+  else if (e.key === "Escape") emit("close");
+  else return;
+  e.preventDefault();
+}
+watch(
+  () => props.open,
+  (o) => {
+    if (o) window.addEventListener("keydown", onKeydown);
+    else window.removeEventListener("keydown", onKeydown);
+  },
+);
+onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 </script>
 
 <template>

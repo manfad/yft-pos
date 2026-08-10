@@ -20,10 +20,23 @@ export interface ImagesBridge {
   import(): Promise<{ name: string; dataUrl: string }[]>;
 }
 
+/** Silent printing via the Electron main process. */
+export interface PrintingBridge {
+  printHtml(html: string): Promise<{ ok: boolean; error?: string }>;
+}
+
+/** Outbox mailer in the Electron main process (nodemailer over Gmail SMTP). */
+export interface MailerBridge {
+  /** Try to send every unsent outbox row now; returns what happened. */
+  process(): Promise<{ sent: number; pending: number; lastError: string | null }>;
+}
+
 declare global {
   interface Window {
     sqlite?: SqliteBridge;
     images?: ImagesBridge;
+    printing?: PrintingBridge;
+    mailer?: MailerBridge;
   }
 }
 

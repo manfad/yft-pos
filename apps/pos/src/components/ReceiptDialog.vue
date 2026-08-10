@@ -1,13 +1,45 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { buildReceipt, fmtMoney, fmtQty, unitLabel, type Order, type OrderLine } from "@yf/core";
 import { imageCss } from "../productImage";
 import { currentCompany } from "../place";
 import { printer } from "../printing/printer";
 import { PAYMENT_UI } from "../payments";
+import { getRepo } from "../db";
+import { useUi } from "../stores/ui";
+import PinDialog from "./PinDialog.vue";
 
 const props = defineProps<{ order: Order | null }>();
-defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; voided: [order: Order] }>();
+
+const ui = useUi();
+
+// A sale can be cancelled (voided) only while its business day is still open —
+// once the day is closed and reported to HQ, the record is final.
+const canVoid = ref(false);
+const pinOpen = ref(false);
+watch(
+  () => props.order,
+  async (o) => {
+    pinOpen.value = false;
+    canVoid.value = false;
+    if (!o || o.voidedAt != null) return;
+    const repo = await getRepo();
+    canVoid.value = (await repo.getDayClose(o.businessDate, o.companyId)) == null;
+  },
+  { immediate: true },
+);
+
+async function doVoid(): Promise<void> {
+  pinOpen.value = false;
+  const o = props.order;
+  if (!o) return;
+  const repo = await getRepo();
+  await repo.voidOrder(o.id, Date.now());
+  ui.showToast(`Sale #${o.id} cancelled`);
+  const updated = await repo.getOrder(o.id);
+  emit("voided", updated ?? o);
+}
 
 // Per-unit rate, with the bulk-tier threshold appended when it was applied —
 // e.g. "RM 25.00/kg" or "RM 23.00/kg (10kg)". Mirrors the printed receipt.
@@ -46,8 +78,15 @@ const whenStr = computed(() => {
     <div class="w-540px max-w-full max-h-86vh overflow-auto bg-surface rounded-24px shadow-[0_22px_64px_rgba(0,0,0,.32)]">
       <div class="flex items-center justify-between px-24px py-22px border-b-2 border-borderSoft">
         <div>
-          <div class="text-23px font-800">Receipt #{{ order.id }}</div>
+          <div class="text-23px font-800">
+            Receipt #{{ order.id }}
+            <span
+              v-if="order.voidedAt != null"
+              class="inline-flex items-center px-12px py-4px rounded-full bg-[#f8dcd8] border-2 border-[#d94b3d] text-14px font-900 text-[#d94b3d] align-middle ml-6px"
+            >CANCELLED</span>
+          </div>
           <div class="text-15px font-700 text-muted">{{ whenStr }}</div>
+          <div v-if="order.creditorName" class="text-15px font-800 text-[#9a6b34]">{{ order.creditorName }}</div>
         </div>
         <div class="flex items-center gap-12px">
           <span
@@ -93,9 +132,21 @@ const whenStr = computed(() => {
         <span class="text-21px font-800">TOTAL</span>
         <span class="font-display text-42px font-700 text-terracotta">{{ fmtMoney(order.totalCents) }}</span>
       </div>
-      <div class="px-24px py-16px border-t-2 border-borderSoft bg-panel rounded-b-24px">
+      <div class="px-24px py-16px border-t-2 border-borderSoft bg-panel rounded-b-24px flex flex-col gap-10px">
         <button class="btn-pay w-full h-58px text-20px" @click="print">🖨 Print receipt</button>
+        <button
+          v-if="canVoid"
+          class="w-full h-52px rounded-16px border-2 border-[#d94b3d] bg-white text-17px font-800 text-[#d94b3d] cursor-pointer press"
+          @click="pinOpen = true"
+        >✕ Cancel this sale (PIN)</button>
       </div>
     </div>
   </div>
+
+  <PinDialog
+    :open="pinOpen"
+    :title="`Cancel sale #${order?.id} · ${fmtMoney(order?.totalCents ?? 0)} — enter PIN`"
+    @ok="doVoid"
+    @close="pinOpen = false"
+  />
 </template>

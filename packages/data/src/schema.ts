@@ -26,6 +26,7 @@ export const items = sqliteTable("items", {
   tint: text("tint").notNull().default("#eee"),
   priceCents: integer("price_cents").notNull(),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
+  tracksTail: integer("tracks_tail", { mode: "boolean" }).notNull().default(false),
 });
 
 export const priceTiers = sqliteTable("price_tiers", {
@@ -39,8 +40,47 @@ export const orders = sqliteTable("orders", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   companyId: integer("company_id").notNull().default(1),
   ts: integer("ts").notNull(),
+  businessDate: text("business_date"),
   totalCents: integer("total_cents").notNull(),
-  method: text("method", { enum: ["Cash", "Bank", "QR"] }).notNull(),
+  method: text("method", { enum: ["Cash", "Bank", "QR", "Credit"] }).notNull(),
+  voidedAt: integer("voided_at"),
+});
+
+export const dayCloses = sqliteTable("day_closes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  companyId: integer("company_id").notNull().default(1),
+  businessDate: text("business_date").notNull(),
+  closedAt: integer("closed_at").notNull(),
+  auto: integer("auto", { mode: "boolean" }).notNull().default(false),
+});
+
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
+export const outbox = sqliteTable("outbox", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  companyId: integer("company_id").notNull().default(1),
+  businessDate: text("business_date").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  attachmentName: text("attachment_name"),
+  attachmentB64: text("attachment_b64"),
+  createdAt: integer("created_at").notNull(),
+  sentAt: integer("sent_at"),
+  attempts: integer("attempts").notNull().default(0),
+  lastError: text("last_error"),
+});
+
+export const credits = sqliteTable("credits", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  companyId: integer("company_id").notNull().default(1),
+  orderId: integer("order_id").notNull(),
+  name: text("name").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  date: integer("date").notNull(),
+  isClear: integer("is_clear"),
 });
 
 export const orderItems = sqliteTable("order_items", {
@@ -53,6 +93,7 @@ export const orderItems = sqliteTable("order_items", {
   tint: text("tint").notNull().default("#eee"),
   priceCents: integer("price_cents").notNull(),
   qtyMilli: integer("qty_milli").notNull(),
+  tailCount: integer("tail_count").notNull().default(0),
   bulkPrice: integer("bulk_price", { mode: "boolean" }).notNull().default(false),
   bulkMinQtyMilli: integer("bulk_min_qty_milli"),
 });

@@ -1,22 +1,20 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
+import dayjs from "dayjs";
 import type { Company } from "@yf/core";
 import { companies, currentCompany, setCompany } from "../place";
-import { from, todayStr, dateLabel, setToday } from "../salesDate";
+import { from, todayStr, dateLabel, setToday, setDay } from "../salesDate";
 import DatePicker from "./DatePicker.vue";
 import SendReportDialog from "./SendReportDialog.vue";
+import CloseDayDialog from "./CloseDayDialog.vue";
 
 const props = defineProps<{ mode: "till" | "sales" | "admin" | "report" }>();
 
 const router = useRouter();
-// Static date shown (same pill design) on the Menu/Admin pages where the date
-// isn't selectable.
-const todayLabel = new Date().toLocaleDateString("en-GB", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
+// Today's date shown (same pill design) on the Menu/Admin pages where the date
+// isn't selectable. Derived from the ticking clock so it rolls over at midnight.
+const todayLabel = computed(() => dayjs(todayStr.value).format("DD MMM YYYY"));
 
 // Left nav (back) button targets per page:
 //   Menu (/)        → Dashboard (gated)
@@ -29,6 +27,15 @@ function goLeft(): void {
 
 // Send-report dialog (report mode).
 const sendOpen = ref(false);
+
+// Close Day — the daily ritual, reachable from the till.
+const closeDayOpen = ref(false);
+function onDayClosed(businessDate: string): void {
+  closeDayOpen.value = false;
+  // Land the cashier on the just-closed day's report (client takes a copy daily).
+  setDay(businessDate);
+  void router.push("/report");
+}
 
 // Company switcher popover.
 const placeOpen = ref(false);
@@ -75,6 +82,14 @@ function pickDate(v: string) {
 
     <!-- right -->
     <div class="flex items-center gap-12px">
+      <!-- till: the Close Day ritual -->
+      <button
+        v-if="mode === 'till'"
+        class="press flex items-center h-54px px-20px rounded-14px border-2 border-[#b3541e] bg-[#f6e3d3] text-17px font-800 text-[#b3541e] cursor-pointer"
+        @click="closeDayOpen = true"
+      >
+        Close Day
+      </button>
       <!-- Items + Report live behind the (gated) Sales area. -->
       <button
         v-if="mode === 'sales'"
@@ -152,4 +167,5 @@ function pickDate(v: string) {
   </div>
 
   <SendReportDialog :open="sendOpen" @close="sendOpen = false" />
+  <CloseDayDialog :open="closeDayOpen" @closed="onDayClosed" @close="closeDayOpen = false" />
 </template>

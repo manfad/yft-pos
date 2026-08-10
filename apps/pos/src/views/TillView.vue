@@ -5,17 +5,41 @@ import TopBar from "../components/TopBar.vue";
 import ProductCard from "../components/ProductCard.vue";
 import CartLine from "../components/CartLine.vue";
 import PayDialog from "../components/PayDialog.vue";
+import CreditorDialog from "../components/CreditorDialog.vue";
 import NumpadDialog from "../components/NumpadDialog.vue";
 import { useCatalog } from "../stores/catalog";
 import { useCart } from "../stores/cart";
 import { useUi } from "../stores/ui";
 import { currentCompany } from "../place";
 import { printer } from "../printing/printer";
+import { getRepo } from "../db";
 
 const catalog = useCatalog();
 const cart = useCart();
 const ui = useUi();
 const payOpen = ref(false);
+
+// Credit (pay-later): the picker and the list of previous creditor names.
+const creditorOpen = ref(false);
+const creditorNames = ref<string[]>([]);
+async function openCreditor(): Promise<void> {
+  payOpen.value = false;
+  const repo = await getRepo();
+  const credits = await repo.listCredits(currentCompany.value.id);
+  // Distinct names, most-recent first (listCredits is ordered by date desc).
+  creditorNames.value = [...new Set(credits.map((c) => c.name))];
+  creditorOpen.value = true;
+}
+async function confirmCredit(name: string): Promise<void> {
+  creditorOpen.value = false;
+  const order = await cart.pay("Credit", name);
+  if (order) {
+    ui.showToast(`Credit · ${name} · ${fmtMoney(order.totalCents)}`);
+    void printer
+      .print(buildReceipt(order, { storeName: currentCompany.value.name }))
+      .catch(() => ui.showToast("Printing failed"));
+  }
+}
 
 onMounted(() => {
   if (catalog.items.length === 0) void catalog.load();
@@ -28,6 +52,11 @@ const activePriceStr = computed(() =>
 const activeQtyStr = computed(() =>
   active.value ? fmtQtyUnit(active.value.qtyMilli, active.value.item.unit) : "—",
 );
+// Tail ("ekor") adjuster — only shown for items that track a head count.
+const activeTracksTail = computed(() => active.value?.item.tracksTail ?? false);
+const activeTailStr = computed(() => (active.value ? `${active.value.tailCount} ekor` : "—"));
+// The cart shows a Tail column only when at least one line tracks tail.
+const hasTail = computed(() => cart.lines.some((l) => l.item.tracksTail));
 const activeMathStr = computed(() => {
   const l = active.value;
   if (!l) return "Tap a product, then set the quantity";
@@ -36,39 +65,64 @@ const activeMathStr = computed(() => {
 const activeTiers = computed(() => {
   const l = active.value;
   if (!l || l.item.tiers.length === 0) return [];
-  return [...l.item.tiers]
-    .sort((a, b) => a.minQtyMilli - b.minQtyMilli)
-    .map((t) => ({
-      id: t.id,
-      qtyText: fmtQtyUnit(t.minQtyMilli, l.item.unit),
-      priceText: fmtMoney(t.priceCents),
-      // "hit" = the current quantity has reached this threshold.
-      active: l.qtyMilli >= t.minQtyMilli,
-    }));
+  const sorted = [...l.item.tiers].sort((a, b) => a.minQtyMilli - b.minQtyMilli);
+  // Only one chip is "active" — the single tier that actually sets the price
+  // (the highest threshold the quantity has reached). All others read as gray.
+  const reached = sorted.filter((t) => l.qtyMilli >= t.minQtyMilli);
+  const appliedId = reached.at(-1)?.id ?? null;
+  return sorted.map((t) => ({
+    id: t.id,
+    qtyText: fmtQtyUnit(t.minQtyMilli, l.item.unit),
+    priceText: fmtMoney(t.priceCents),
+    active: t.id === appliedId,
+  }));
+});
+// The base price is the active one only while no tier threshold has been reached.
+const basePriceActive = computed(() => {
+  const l = active.value;
+  return !!l && !l.item.tiers.some((t) => l.qtyMilli >= t.minQtyMilli);
 });
 
-// numpad: tap any quantity to type it directly (touchscreen-friendly)
+// numpad: tap any quantity (or tail count) to type it directly (touchscreen-friendly)
 const numpadUid = ref<number | null>(null);
+const numpadMode = ref<"qty" | "tail">("qty");
 const numpadLine = computed(() =>
   numpadUid.value == null ? null : (cart.lines.find((l) => l.uid === numpadUid.value) ?? null),
 );
-function openNumpad(uid?: number): void {
+function openNumpad(uid?: number, mode: "qty" | "tail" = "qty"): void {
   const id = uid ?? active.value?.uid ?? null;
-  if (id != null) numpadUid.value = id;
+  if (id != null) {
+    numpadMode.value = mode;
+    numpadUid.value = id;
+  }
 }
 function confirmQty(value: number): void {
-  if (numpadUid.value != null) cart.setQty(numpadUid.value, value);
+  if (numpadUid.value != null) {
+    if (numpadMode.value === "tail") cart.setTail(numpadUid.value, value);
+    else cart.setQty(numpadUid.value, value);
+  }
   numpadUid.value = null;
 }
 
 function openPay(): void {
-  if (cart.totalCents > 0) payOpen.value = true;
+  if (cart.totalCents <= 0) return;
+  // Don't sell a tail-tracking line until its head count is entered.
+  const missing = cart.missingTail;
+  if (missing) {
+    cart.select(missing.uid);
+    const needsWeight = missing.qtyMilli <= 0;
+    const needsTail = missing.tailCount <= 0;
+    const needed = needsWeight && needsTail ? "weight and Ekor" : needsWeight ? "weight" : "Ekor";
+    ui.showToast(`Enter ${needed} for ${missing.item.name}`);
+    return;
+  }
+  payOpen.value = true;
 }
 async function confirm(method: PaymentMethod): Promise<void> {
   const order = await cart.pay(method);
   payOpen.value = false;
   if (order) {
-    ui.showToast(`${method} · ${fmtMoney(order.totalCents)}`);
+    ui.showToast(`Payment complete · ${method} · ${fmtMoney(order.totalCents)}`);
     // Auto-print the receipt on payment.
     void printer
       .print(buildReceipt(order, { storeName: currentCompany.value.name }))
@@ -100,17 +154,18 @@ async function confirm(method: PaymentMethod): Promise<void> {
         <div class="flex items-center gap-10px min-h-26px flex-wrap">
           <div
             v-if="active"
-            class="text-15px font-800 text-muted bg-[#f4ecdc] rounded-full px-10px py-4px whitespace-nowrap"
+            class="inline-flex items-center text-15px font-800 rounded-full px-10px py-4px border-2 whitespace-nowrap transition-colors"
+            :class="basePriceActive ? 'bg-olive text-white border-olive' : 'bg-[#ece6d8] text-muted border-borderSoft'"
           >{{ activePriceStr }}</div>
           <span
             v-for="t in activeTiers"
             :key="t.id"
-            class="inline-flex items-center gap-5px text-16px font-800 rounded-full px-12px py-5px border-2 whitespace-nowrap transition-colors"
+            class="inline-flex items-center gap-5px text-15px font-800 rounded-full px-10px py-4px border-2 whitespace-nowrap transition-colors"
             :class="t.active ? 'bg-olive text-white border-olive' : 'bg-[#ece6d8] text-muted border-borderSoft'"
             :title="t.active ? 'Bulk price applied' : 'Bulk price available'"
           >
             {{ t.qtyText }}
-            <span class="font-900" :class="t.active ? 'text-white' : 'text-[#e0a92e]'">=</span>
+            <span class="font-900" :class="t.active ? 'text-white' : 'text-muted'">=</span>
             {{ t.priceText }}
           </span>
         </div>
@@ -134,6 +189,31 @@ async function confirm(method: PaymentMethod): Promise<void> {
           <button class="tile-warm h-58px text-20px" @click="cart.adjust(10)">+ 10</button>
         </div>
       </div>
+
+      <!-- tail ("ekor") adjuster — a head count for fish/chicken, independent of kg -->
+      <div
+        v-if="activeTracksTail"
+        class="bg-surface border-2 border-olive rounded-18px p-16px flex flex-col gap-13px flex-none"
+      >
+        <div class="flex items-center gap-14px">
+          <button class="adj-btn w-64px h-64px text-34px" @click="cart.adjustTail(-1)">−</button>
+          <button
+            class="flex-1 text-center font-display text-42px font-600 bg-[#eef0e0] rounded-14px py-6px border-2 border-transparent cursor-pointer press disabled:cursor-default"
+            :disabled="!active"
+            title="Tap to type Ekor"
+            @click="openNumpad(undefined, 'tail')"
+          >
+            {{ activeTailStr }}
+          </button>
+          <button class="adj-btn w-64px h-64px text-34px" @click="cart.adjustTail(1)">+</button>
+        </div>
+        <div class="grid grid-cols-4 gap-10px">
+          <button class="tile-dark h-58px text-20px" @click="cart.adjustTail(-10)">− 10</button>
+          <button class="tile-dark h-58px text-20px" @click="cart.adjustTail(-1)">− 1</button>
+          <button class="tile-warm h-58px text-20px" @click="cart.adjustTail(1)">+ 1</button>
+          <button class="tile-warm h-58px text-20px" @click="cart.adjustTail(10)">+ 10</button>
+        </div>
+      </div>
     </div>
 
     <!-- right: current sale -->
@@ -145,10 +225,12 @@ async function confirm(method: PaymentMethod): Promise<void> {
       <!-- column header (aligned to CartLine's grid) -->
       <div
         v-if="cart.lines.length"
-        class="flex-none pt-14px pb-6px grid items-center gap-12px grid-cols-[minmax(0,1fr)_220px_150px_44px] text-12px font-800 text-muted uppercase tracking-wide"
+        class="flex-none pt-14px pb-6px grid items-center gap-10px text-12px font-800 text-muted uppercase tracking-wide"
+        :class="hasTail ? 'grid-cols-[minmax(0,1fr)_172px_188px_138px_44px]' : 'grid-cols-[minmax(0,1fr)_220px_150px_44px]'"
         style="padding-left: 32px; padding-right: 32px"
       >
         <div>Item</div>
+        <div v-if="hasTail" class="text-center">Ekor</div>
         <div class="text-center">Qty</div>
         <div class="text-right">Price</div>
         <div />
@@ -167,9 +249,12 @@ async function confirm(method: PaymentMethod): Promise<void> {
           :line="line"
           :active="line.uid === cart.activeUid"
           :amount-cents="cart.amountOf(line)"
+          :has-tail="hasTail"
           @select="cart.select(line.uid)"
           @step="(d) => cart.step(line.uid, d)"
           @edit="openNumpad(line.uid)"
+          @step-tail="(d) => cart.stepTail(line.uid, d)"
+          @edit-tail="openNumpad(line.uid, 'tail')"
           @remove="cart.remove(line.uid)"
         />
       </div>
@@ -187,14 +272,23 @@ async function confirm(method: PaymentMethod): Promise<void> {
     :open="payOpen"
     :total-cents="cart.totalCents"
     @confirm="confirm"
+    @credit="openCreditor"
     @close="payOpen = false"
+  />
+
+  <CreditorDialog
+    :open="creditorOpen"
+    :total-cents="cart.totalCents"
+    :names="creditorNames"
+    @confirm="confirmCredit"
+    @close="creditorOpen = false"
   />
 
   <NumpadDialog
     :open="numpadLine !== null"
-    :title="`${numpadLine?.item.name ?? ''} — quantity`"
-    :unit="unitLabel(numpadLine?.item.unit ?? 'each')"
-    :initial="numpadLine ? numpadLine.qtyMilli / 1000 : 0"
+    :title="`${numpadLine?.item.name ?? ''} — ${numpadMode === 'tail' ? 'Ekor' : 'quantity'}`"
+    :unit="numpadMode === 'tail' ? 'ekor' : unitLabel(numpadLine?.item.unit ?? 'each')"
+    :initial="numpadLine ? (numpadMode === 'tail' ? numpadLine.tailCount : numpadLine.qtyMilli / 1000) : 0"
     @confirm="confirmQty"
     @close="numpadUid = null"
   />

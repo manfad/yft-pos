@@ -40,14 +40,11 @@ defineEmits<{ inspectMethod: [method: PaymentMethod] }>();
       <tbody>
         <tr v-for="m in PAYMENT_METHODS" :key="m" class="border-t-2 border-borderSoft">
           <td class="py-12px pr-8px">
-            <div class="flex items-center gap-14px min-w-0">
-              <div
-                class="w-48px h-48px flex-none rounded-14px flex items-center justify-center text-22px"
-                :style="{ background: PAYMENT_UI[m].tint }"
-              >
-                {{ PAYMENT_UI[m].icon }}
-              </div>
-              <div class="text-16px font-800 uppercase tracking-wide truncate">{{ m }}</div>
+            <div
+              class="inline-flex h-48px px-16px rounded-14px items-center justify-center font-display text-16px font-800 uppercase tracking-wide"
+              :style="{ background: PAYMENT_UI[m].tint, color: PAYMENT_UI[m].color }"
+            >
+              {{ PAYMENT_UI[m].label }}
             </div>
           </td>
           <td class="py-12px px-8px text-center text-20px font-800 text-ink whitespace-nowrap">

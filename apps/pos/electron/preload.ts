@@ -15,3 +15,13 @@ contextBridge.exposeInMainWorld("images", {
   list: () => ipcRenderer.invoke("images:list"),
   import: () => ipcRenderer.invoke("images:import"),
 });
+
+// Silent printing to the default printer (no dialog).
+contextBridge.exposeInMainWorld("printing", {
+  printHtml: (html: string) => ipcRenderer.invoke("print:html", html),
+});
+
+// Outbox mailer — "try to send the queued HQ reports now".
+contextBridge.exposeInMainWorld("mailer", {
+  process: () => ipcRenderer.invoke("mailer:process"),
+});

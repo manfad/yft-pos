@@ -1,4 +1,4 @@
-import type { Company, Order, PaymentMethod, PricedItem, UnitType, Unit } from "./types.js";
+import type { Company, Credit, DayClose, Order, PaymentMethod, PricedItem, UnitType, Unit } from "./types.js";
 
 // The storage boundary. Implementations do *only* raw persistence — no pricing,
 // no totals — so the domain rules stay in one place (pricing.ts / orders.ts).
@@ -14,6 +14,8 @@ export interface ItemInput {
   unit?: Unit;
   tint?: string;
   priceCents: number;
+  /** sold by the head — capture a tail/"ekor" count alongside weight */
+  tracksTail?: boolean;
 }
 
 export type ItemPatch = Partial<Omit<ItemInput, "key">> & { active?: boolean };
@@ -31,6 +33,10 @@ export interface OrderDraft {
   ts: number;
   method: PaymentMethod;
   totalCents: number;
+  /** Set when method is "Credit": the creditor a `credits` row is recorded for. */
+  creditorName?: string;
+  /** Business day (YYYY-MM-DD) the sale counts toward; defaults to ts's local day. */
+  businessDate?: string;
   lines: Array<{
     itemId: number | null;
     name: string;
@@ -40,6 +46,8 @@ export interface OrderDraft {
     priceCents: number;
     qtyMilli: number;
     amountCents: number;
+    /** head count ("ekor") on this line; 0 when the item doesn't track tail */
+    tailCount?: number;
     bulkPrice?: boolean;
     bulkMinQtyMilli?: number;
   }>;
@@ -67,4 +75,46 @@ export interface PosRepo {
   getOrder(id: number): Promise<Order | null>;
   /** Orders with ts in [startMs, endMs), newest first; optionally one company. */
   listOrders(startMs: number, endMs: number, companyId?: number): Promise<Order[]>;
+  /** Orders with business_date in [fromDate, toDate] (inclusive), newest first. */
+  listOrdersByBusinessDate(fromDate: string, toDate: string, companyId?: number): Promise<Order[]>;
+  /** Mark a sale cancelled at `at` (epoch ms); removes its credit row if any. */
+  voidOrder(orderId: number, at: number): Promise<void>;
+
+  // --- business days (Close Day) ---
+  getDayClose(businessDate: string, companyId?: number): Promise<DayClose | null>;
+  /** Record a day as closed. Throws if already closed. */
+  closeDay(businessDate: string, opts?: { companyId?: number; auto?: boolean; at?: number }): Promise<DayClose>;
+  /**
+   * Undo a close: deletes the close record and pulls sales that were pushed to
+   * the next business day (but rung up on `businessDate`'s calendar day) back.
+   */
+  reopenDay(businessDate: string, companyId?: number): Promise<void>;
+  /** Business dates before `beforeDate` that have orders but no close record. */
+  listUnclosedDays(beforeDate: string, companyId?: number): Promise<string[]>;
+
+  // --- settings (key/value, shared with the Electron main process) ---
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
+
+  // --- outbox (queued HQ emails; the Electron main process sends them) ---
+  queueEmail(input: {
+    companyId?: number;
+    businessDate: string;
+    subject: string;
+    body: string;
+    attachmentName?: string;
+    attachmentB64?: string;
+  }): Promise<number>;
+  /** Outbox rows for one business date (or all), newest first. */
+  listOutbox(businessDate?: string): Promise<
+    Array<{ id: number; businessDate: string; subject: string; createdAt: number; sentAt: number | null; attempts: number; lastError: string | null }>
+  >;
+
+  // --- credits (pay-later) ---
+  /** Credits, newest first; optionally one company and/or only the outstanding ones. */
+  listCredits(companyId?: number, opts?: { outstandingOnly?: boolean }): Promise<Credit[]>;
+  /** Mark every outstanding credit for `name` as settled at `clearedAt` (epoch ms). */
+  clearCreditsByName(name: string, clearedAt: number, companyId?: number): Promise<void>;
+  /** Mark a single credit (one receipt) as settled at `clearedAt` (epoch ms). */
+  clearCredit(creditId: number, clearedAt: number): Promise<void>;
 }

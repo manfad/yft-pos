@@ -5,8 +5,8 @@
 export type Cents = number;
 export type Milli = number;
 
-export type PaymentMethod = "Cash" | "Bank" | "QR";
-export const PAYMENT_METHODS: readonly PaymentMethod[] = ["Cash", "Bank", "QR"];
+export type PaymentMethod = "Cash" | "Bank" | "QR" | "Credit";
+export const PAYMENT_METHODS: readonly PaymentMethod[] = ["Cash", "Bank", "QR", "Credit"];
 
 export type Unit = "kg" | "cup" | "box" | "pack" | "pieces" | "bottle" | "each";
 
@@ -33,6 +33,12 @@ export interface Item {
   tint: string;
   priceCents: Cents;
   active: boolean;
+  /**
+   * When true this item is sold by the head ("ekor") as well as by weight, so
+   * the till captures a separate tail count (e.g. "38 fish") independent of the
+   * kg quantity. Off for everything that isn't an animal/piece.
+   */
+  tracksTail: boolean;
 }
 
 /** A quantity-break: at >= minQtyMilli the unit price drops to priceCents. */
@@ -60,6 +66,11 @@ export interface OrderLine {
   priceCents: Cents;
   qtyMilli: Milli;
   amountCents: Cents;
+  /**
+   * Head count ("ekor") sold on this line, independent of qtyMilli. 0 for lines
+   * whose item doesn't track tail.
+   */
+  tailCount: number;
   /** True when a quantity-break price was applied at sale time. */
   bulkPrice: boolean;
   /** The quantity-break threshold that was applied, if snapshotted. */
@@ -71,9 +82,43 @@ export interface Order {
   /** Company/tenant the sale was made under. */
   companyId: number;
   ts: number; // epoch millis
+  /**
+   * The business day (local YYYY-MM-DD) this sale counts toward. Usually the
+   * calendar day of `ts`, but sales rung up after Close Day belong to the next
+   * day — see closeday.ts.
+   */
+  businessDate: string;
   method: PaymentMethod;
   totalCents: Cents;
   items: OrderLine[];
+  /** Set for "Credit" sales: the creditor the order is owed by. */
+  creditorName?: string;
+  /** Epoch ms the sale was cancelled (voided); null for a normal sale. */
+  voidedAt: number | null;
+}
+
+/** A Close Day record — at most one per company per business day. */
+export interface DayClose {
+  id: number;
+  companyId: number;
+  businessDate: string;
+  closedAt: number; // epoch ms
+  /** True when the app closed the day itself (cashier forgot), not the cashier. */
+  auto: boolean;
+}
+
+/**
+ * A pay-later sale recorded against a named creditor. One row per credited order.
+ * `clearedAt` is null while outstanding and stamped (epoch ms) once settled.
+ */
+export interface Credit {
+  id: number;
+  companyId: number;
+  orderId: number;
+  name: string;
+  amountCents: Cents;
+  date: number; // epoch ms when the credit was taken
+  clearedAt: number | null; // null = outstanding
 }
 
 export type Period = "today" | "month" | "all";

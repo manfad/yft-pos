@@ -51,8 +51,11 @@ export function buildReceipt(order: Order, opts: BuildReceiptOptions): Receipt {
     totalText: fmtMoney(order.totalCents),
     footer: opts.footer ?? "Thank you!",
     lines: order.items.map((it) => ({
-      name: it.name,
-      qtyText: fmtQty(it.qtyMilli),
+      // Ekor items print the head count after the name, e.g. "Ikan Tilapia (6 ekor)".
+      name: it.tailCount > 0 ? `${it.name} (${it.tailCount} ekor)` : it.name,
+      // Weight (kg) lines carry the unit so the count is unambiguous; counted
+      // units (bottle/box/pack/…) stay a bare number.
+      qtyText: it.unit === "kg" ? `${fmtQty(it.qtyMilli)} kg` : fmtQty(it.qtyMilli),
       unitPriceText:
         `${fmtMoney(it.priceCents)}/${unitLabel(it.unit)}` +
         (it.bulkPrice && it.bulkMinQtyMilli != null

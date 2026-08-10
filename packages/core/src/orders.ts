@@ -17,13 +17,19 @@ export interface OrderLineInput {
   itemId?: number;
   key?: string;
   qtyMilli: number;
+  /** head count ("ekor") for tail-tracking items; ignored otherwise */
+  tailCount?: number;
 }
 
 export interface CreateOrderInput {
   method: PaymentMethod;
   ts?: number;
+  /** Business day the sale counts toward; defaults to ts's local calendar day. */
+  businessDate?: string;
   /** Company the sale belongs to; defaults to 1 when omitted. */
   companyId?: number;
+  /** Required when method is "Credit": the creditor the sale is owed by. */
+  creditorName?: string;
   lines: OrderLineInput[];
 }
 
@@ -38,6 +44,9 @@ export function buildOrder(
 ): OrderDraft {
   if (!PAYMENT_METHODS.includes(input.method)) {
     throw new PosError(`method must be one of ${PAYMENT_METHODS.join(", ")}`);
+  }
+  if (input.method === "Credit" && !input.creditorName?.trim()) {
+    throw new PosError("a creditor name is required for credit sales");
   }
   if (!Array.isArray(input.lines) || input.lines.length === 0) {
     throw new PosError("an order needs at least one line");
@@ -64,6 +73,9 @@ export function buildOrder(
       priceCents: unitCents, // effective (post-tier) price, snapshotted
       qtyMilli: line.qtyMilli,
       amountCents,
+      // Tail count is independent of qty; only meaningful for tracksTail items.
+      // Requiring entry is a till-side rule (see cart.pay), so stay lenient here.
+      tailCount: item.tracksTail ? Math.max(0, Math.round(line.tailCount ?? 0)) : 0,
       bulkPrice: tier !== null,
       ...(tier ? { bulkMinQtyMilli: tier.minQtyMilli } : {}),
     };
@@ -76,6 +88,8 @@ export function buildOrder(
     method: input.method,
     totalCents,
     lines,
+    ...(input.businessDate ? { businessDate: input.businessDate } : {}),
+    ...(input.method === "Credit" ? { creditorName: input.creditorName!.trim() } : {}),
   };
 }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { aggregateItemSales, fmtMoney, fmtQty, type ItemSale, type Order } from "@yf/core";
+import { aggregateItemSales, fmtMoney, fmtQtySold, type ItemSale, type Order } from "@yf/core";
 import { imageCss } from "../productImage";
 
 const props = withDefaults(defineProps<{ orders: Order[]; label: string; limit?: number }>(), {
@@ -10,6 +10,7 @@ defineEmits<{ inspectItem: [sale: ItemSale] }>();
 
 const sales = computed(() => aggregateItemSales(props.orders));
 const top = computed(() => sales.value.slice(0, props.limit));
+const totalCents = computed(() => sales.value.reduce((a, s) => a + s.amountCents, 0));
 const showAll = ref(false);
 </script>
 
@@ -28,6 +29,7 @@ const showAll = ref(false);
       <thead>
         <tr class="text-12px font-800 text-faint uppercase tracking-wide">
           <th class="text-left font-800 pb-12px">Item</th>
+          <th class="text-center font-800 pb-12px px-8px text-olive">Qty</th>
           <th class="text-center font-800 pb-12px px-8px">Sales</th>
           <th class="text-right font-800 pb-12px px-8px">Amount</th>
           <th class="w-44px pb-12px" />
@@ -53,8 +55,11 @@ const showAll = ref(false);
               <div class="text-19px font-800 truncate">{{ s.name }}</div>
             </div>
           </td>
+          <td class="py-12px px-8px text-center font-display text-22px font-700 text-olive whitespace-nowrap">
+            {{ s.tailCount || "" }}
+          </td>
           <td class="py-12px px-8px text-center font-display text-22px font-700 text-ink whitespace-nowrap">
-            {{ fmtQty(s.qtyMilli) }}
+            {{ fmtQtySold(s.qtyMilli, s.unit) }}
           </td>
           <td class="py-12px px-8px text-right font-display text-22px font-600 text-terracotta whitespace-nowrap">
             {{ fmtMoney(s.amountCents) }}
@@ -78,7 +83,7 @@ const showAll = ref(false);
     class="fixed inset-0 bg-[rgba(44,38,32,.5)] flex items-center justify-center p-24px z-70"
     @click.self="showAll = false"
   >
-    <div class="w-560px max-w-full max-h-86vh overflow-auto bg-surface rounded-24px shadow-[0_22px_64px_rgba(0,0,0,.32)]">
+    <div class="w-760px max-w-full max-h-86vh overflow-auto bg-surface rounded-24px shadow-[0_22px_64px_rgba(0,0,0,.32)]">
       <div class="flex items-center justify-between px-24px py-22px border-b-2 border-borderSoft sticky top-0 bg-surface">
         <div>
           <div class="text-23px font-800">Items sold — {{ label }}</div>
@@ -90,11 +95,18 @@ const showAll = ref(false);
         >✕</button>
       </div>
       <div class="px-24px py-18px">
+        <!-- total revenue, shown above the breakdown list -->
+        <div class="bg-tile border-2 border-borderSoft rounded-18px px-20px py-16px text-center mb-18px">
+          <div class="text-14px font-800 text-muted uppercase tracking-wide mb-4px">Total</div>
+          <div class="font-display text-40px font-700 text-terracotta leading-tight">{{ fmtMoney(totalCents) }}</div>
+        </div>
+
         <div class="flex items-center gap-14px pb-10px text-12px font-800 text-faint uppercase tracking-wide">
           <div class="w-48px flex-none" />
           <div class="flex-1 min-w-0">Item</div>
-          <div class="w-64px text-center">Sales</div>
-          <div class="w-110px text-right">Amount</div>
+          <div class="w-72px text-center text-olive">Qty</div>
+          <div class="w-96px text-center">Sales</div>
+          <div class="w-150px text-right">Amount</div>
         </div>
         <div
           v-for="s in sales"
@@ -111,10 +123,13 @@ const showAll = ref(false);
             }"
           />
           <div class="flex-1 min-w-0 text-18px font-800 truncate">{{ s.name }}</div>
-          <div class="w-64px text-center font-display text-22px font-700 text-ink">
-            {{ fmtQty(s.qtyMilli) }}
+          <div class="w-72px text-center font-display text-22px font-700 text-olive">
+            {{ s.tailCount || "" }}
           </div>
-          <div class="w-110px text-right font-display text-23px font-600 text-terracotta">
+          <div class="w-96px text-center font-display text-22px font-700 text-ink">
+            {{ fmtQtySold(s.qtyMilli, s.unit) }}
+          </div>
+          <div class="w-150px text-right font-display text-23px font-600 text-terracotta">
             {{ fmtMoney(s.amountCents) }}
           </div>
         </div>

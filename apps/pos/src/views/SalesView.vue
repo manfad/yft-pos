@@ -153,6 +153,12 @@ const timeStr = (ts: number) =>
 const dateStr = (ts: number) =>
   new Date(ts).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 const itemsStr = (o: Order) => `${o.items.length} ${o.items.length === 1 ? "item" : "items"}`;
+
+// A sale was cancelled from the receipt dialog — refresh every list/stat.
+function onVoided(updated: Order): void {
+  detail.value = updated;
+  void sales.load();
+}
 </script>
 
 <template>
@@ -182,7 +188,7 @@ const itemsStr = (o: Order) => `${o.items.length} ${o.items.length === 1 ? "item
     <div v-if="tab === 'date'" class="flex flex-col gap-22px">
       <!-- hourly chart -->
       <div class="bg-surface border-2 border-border rounded-22px p-24px">
-        <div class="text-20px font-800 mb-18px">Hourly Sales — {{ dateLabel }}</div>
+        <div class="text-20px font-800 mb-18px">Daily Sales — {{ dateLabel }}</div>
         <div class="flex items-end gap-8px h-170px">
           <div
             v-for="x in dayHourly"
@@ -235,12 +241,18 @@ const itemsStr = (o: Order) => `${o.items.length} ${o.items.length === 1 ? "item
             <span class="text-17px font-800 text-muted whitespace-nowrap">{{ dateStr(o.ts) }} · {{ timeStr(o.ts) }}</span>
             <span class="flex-1">
               <span class="inline-flex items-center px-10px py-4px rounded-full bg-[#e6edef] border-2 border-[#cfe0e4] text-13px font-800 text-[#3f7c8c] whitespace-nowrap">{{ itemsStr(o) }}</span>
-            </span>
+            </span>            <span
+              v-if="o.voidedAt != null"
+              class="inline-flex items-center px-12px py-5px rounded-full bg-[#f8dcd8] text-14px font-900 tracking-wide text-[#d94b3d]"
+            >VOID</span>
             <span
               class="inline-flex items-center px-12px py-5px rounded-full text-14px font-800 tracking-wide"
               :style="{ color: PAYMENT_UI[o.method].color, background: PAYMENT_UI[o.method].tint }"
             >{{ PAYMENT_UI[o.method].label }}</span>
-            <span class="font-display text-25px font-600 min-w-104px text-right">{{ fmtMoney(o.totalCents) }}</span>
+            <span
+              class="font-display text-25px font-600 min-w-104px text-right"
+              :class="o.voidedAt != null ? 'line-through opacity-50' : ''"
+            >{{ fmtMoney(o.totalCents) }}</span>
             <span class="text-24px text-faint">›</span>
           </button>
         </div>
@@ -307,12 +319,18 @@ const itemsStr = (o: Order) => `${o.items.length} ${o.items.length === 1 ? "item
             <span class="text-17px font-800 text-muted whitespace-nowrap">{{ dateStr(o.ts) }} · {{ timeStr(o.ts) }}</span>
             <span class="flex-1">
               <span class="inline-flex items-center px-10px py-4px rounded-full bg-[#e6edef] border-2 border-[#cfe0e4] text-13px font-800 text-[#3f7c8c] whitespace-nowrap">{{ itemsStr(o) }}</span>
-            </span>
+            </span>            <span
+              v-if="o.voidedAt != null"
+              class="inline-flex items-center px-12px py-5px rounded-full bg-[#f8dcd8] text-14px font-900 tracking-wide text-[#d94b3d]"
+            >VOID</span>
             <span
               class="inline-flex items-center px-12px py-5px rounded-full text-14px font-800 tracking-wide"
               :style="{ color: PAYMENT_UI[o.method].color, background: PAYMENT_UI[o.method].tint }"
             >{{ PAYMENT_UI[o.method].label }}</span>
-            <span class="font-display text-25px font-600 min-w-104px text-right">{{ fmtMoney(o.totalCents) }}</span>
+            <span
+              class="font-display text-25px font-600 min-w-104px text-right"
+              :class="o.voidedAt != null ? 'line-through opacity-50' : ''"
+            >{{ fmtMoney(o.totalCents) }}</span>
             <span class="text-24px text-faint">›</span>
           </button>
         </div>
@@ -379,12 +397,18 @@ const itemsStr = (o: Order) => `${o.items.length} ${o.items.length === 1 ? "item
             <span class="text-17px font-800 text-muted whitespace-nowrap">{{ dateStr(o.ts) }} · {{ timeStr(o.ts) }}</span>
             <span class="flex-1">
               <span class="inline-flex items-center px-10px py-4px rounded-full bg-[#e6edef] border-2 border-[#cfe0e4] text-13px font-800 text-[#3f7c8c] whitespace-nowrap">{{ itemsStr(o) }}</span>
-            </span>
+            </span>            <span
+              v-if="o.voidedAt != null"
+              class="inline-flex items-center px-12px py-5px rounded-full bg-[#f8dcd8] text-14px font-900 tracking-wide text-[#d94b3d]"
+            >VOID</span>
             <span
               class="inline-flex items-center px-12px py-5px rounded-full text-14px font-800 tracking-wide"
               :style="{ color: PAYMENT_UI[o.method].color, background: PAYMENT_UI[o.method].tint }"
             >{{ PAYMENT_UI[o.method].label }}</span>
-            <span class="font-display text-25px font-600 min-w-104px text-right">{{ fmtMoney(o.totalCents) }}</span>
+            <span
+              class="font-display text-25px font-600 min-w-104px text-right"
+              :class="o.voidedAt != null ? 'line-through opacity-50' : ''"
+            >{{ fmtMoney(o.totalCents) }}</span>
             <span class="text-24px text-faint">›</span>
           </button>
         </div>
@@ -399,5 +423,5 @@ const itemsStr = (o: Order) => `${o.items.length} ${o.items.length === 1 ? "item
     @select="detail = $event"
     @close="inspect = null"
   />
-  <ReceiptDialog :order="detail" @close="detail = null" />
+  <ReceiptDialog :order="detail" @voided="onVoided" @close="detail = null" />
 </template>

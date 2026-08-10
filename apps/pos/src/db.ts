@@ -30,7 +30,15 @@ async function boot(): Promise<SqlPosRepo> {
   }
   const SQL = await initSqlJs({ locateFile: () => wasmUrl });
   const saved = await get<Uint8Array>(DB_KEY);
-  const db = saved ? new SQL.Database(saved) : new SQL.Database();
+  // A corrupt or partially-exported snapshot must not brick the app: if it won't
+  // open, drop it and start fresh rather than letting boot() reject.
+  let db: InstanceType<typeof SQL.Database>;
+  try {
+    db = saved ? new SQL.Database(saved) : new SQL.Database();
+  } catch (err) {
+    console.warn("Discarding unreadable local DB snapshot — starting fresh.", err);
+    db = new SQL.Database();
+  }
 
   // Debounced persistence — export the whole DB after writes settle.
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -40,8 +48,11 @@ async function boot(): Promise<SqlPosRepo> {
   };
 
   const driver = createSqlJsDriver(db as never, { afterWrite: persist });
-  // Seed demo orders only on a fresh DB so the Sales report isn't empty.
-  return initRepo(driver, { seedDemoOrders: !saved });
+  // Browser dev convenience: seed demo orders whenever the Sales report would be
+  // empty (initRepo only seeds when the orders table has no rows), so a stale or
+  // empty snapshot from an earlier run still shows data. Production (Electron,
+  // above) stays empty.
+  return initRepo(driver, { seedDemoOrders: true });
 }
 
 /** Wipe the local DB (used by the admin "reset demo data" action). */

@@ -1,7 +1,9 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import Database from "better-sqlite3";
+import nodemailer from "nodemailer";
 
 // On-disk SQLite lives in the main process (native module stays out of the
 // sandboxed renderer). The renderer talks to it over IPC via the bridge in
@@ -96,6 +98,142 @@ ipcMain.handle("db:reset", () => {
   return true;
 });
 
+// ---------------------------------------------------------------------------
+// Local rolling backups: one snapshot per calendar day, keep the last 30. Run
+// at every launch — cheap, and it means a corrupted DB or a fat-fingered edit
+// can always be rolled back to yesterday.
+const KEEP_BACKUPS = 30;
+
+async function backupDaily(): Promise<void> {
+  const dir = path.join(app.getPath("userData"), "backups");
+  fs.mkdirSync(dir, { recursive: true });
+  const today = new Date();
+  const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const dest = path.join(dir, `yft-pos-${stamp}.sqlite`);
+  try {
+    if (!fs.existsSync(dest)) await db.backup(dest);
+    const files = fs
+      .readdirSync(dir)
+      .filter((f) => f.startsWith("yft-pos-") && f.endsWith(".sqlite"))
+      .sort();
+    for (const f of files.slice(0, Math.max(0, files.length - KEEP_BACKUPS))) {
+      fs.unlinkSync(path.join(dir, f));
+    }
+  } catch (err) {
+    console.error("backup failed:", err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Silent printing: render the HTML in a hidden window and print straight to
+// the default printer — the cashier never sees a print dialog.
+ipcMain.handle("print:html", (_e, html: string) => {
+  return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+    let settled = false;
+    const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
+    const done = (ok: boolean, error?: string) => {
+      if (settled) return;
+      settled = true;
+      win.destroy();
+      resolve(error ? { ok, error } : { ok });
+    };
+    win.webContents.on("did-finish-load", () => {
+      win.webContents.print(
+        { silent: true, printBackground: true, margins: { marginType: "none" } },
+        (ok, reason) => done(ok, ok ? undefined : reason || "print failed"),
+      );
+    });
+    win.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html)).catch((e) => {
+      done(false, String(e));
+    });
+    setTimeout(() => done(false, "print timed out"), 30_000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Outbox mailer: the renderer queues daily-report emails in the `outbox` table
+// (body + Excel attachment); this loop sends them via the dedicated Gmail
+// account (App Password in `settings`) and keeps retrying while offline. A
+// fresh DB snapshot rides along as the offsite backup.
+const getSetting = (key: string): string | null => {
+  try {
+    const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as
+      | { value: string }
+      | undefined;
+    return row?.value || null;
+  } catch {
+    return null; // settings table not created yet (first run)
+  }
+};
+
+let mailerBusy = false;
+
+async function processOutbox(): Promise<{ sent: number; pending: number; lastError: string | null }> {
+  if (mailerBusy) return { sent: 0, pending: 0, lastError: "busy" };
+  mailerBusy = true;
+  let sent = 0;
+  let lastError: string | null = null;
+  try {
+    interface OutboxRow {
+      id: number;
+      subject: string;
+      body: string;
+      attachment_name: string | null;
+      attachment_b64: string | null;
+    }
+    let rows: OutboxRow[] = [];
+    try {
+      rows = db
+        .prepare("SELECT id, subject, body, attachment_name, attachment_b64 FROM outbox WHERE sent_at IS NULL ORDER BY id")
+        .all() as OutboxRow[];
+    } catch {
+      return { sent: 0, pending: 0, lastError: null }; // outbox table not there yet
+    }
+    if (rows.length === 0) return { sent: 0, pending: 0, lastError: null };
+
+    const user = getSetting("smtp_user");
+    const pass = getSetting("smtp_pass");
+    const to = getSetting("report_recipient");
+    if (!user || !pass || !to) {
+      return { sent: 0, pending: rows.length, lastError: "email not configured" };
+    }
+    const transporter = nodemailer.createTransport({ service: "gmail", auth: { user, pass } });
+
+    // One DB snapshot per batch — attached to each report as the offsite backup.
+    const snapshot = path.join(os.tmpdir(), `yft-pos-snapshot-${Date.now()}.sqlite`);
+    let snapshotBuf: Buffer | null = null;
+    try {
+      await db.backup(snapshot);
+      snapshotBuf = fs.readFileSync(snapshot);
+      fs.unlinkSync(snapshot);
+    } catch {
+      snapshotBuf = null; // still send the report without the backup
+    }
+
+    for (const row of rows) {
+      const attachments: { filename: string; content: Buffer }[] = [];
+      if (row.attachment_name && row.attachment_b64) {
+        attachments.push({ filename: row.attachment_name, content: Buffer.from(row.attachment_b64, "base64") });
+      }
+      if (snapshotBuf) attachments.push({ filename: "yft-pos-backup.sqlite", content: snapshotBuf });
+      try {
+        await transporter.sendMail({ from: user, to, subject: row.subject, text: row.body, attachments });
+        db.prepare("UPDATE outbox SET sent_at = ?, last_error = NULL WHERE id = ?").run(Date.now(), row.id);
+        sent++;
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err);
+        db.prepare("UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?").run(lastError, row.id);
+      }
+    }
+    const pending = (db.prepare("SELECT COUNT(*) AS n FROM outbox WHERE sent_at IS NULL").get() as { n: number }).n;
+    return { sent, pending, lastError };
+  } finally {
+    mailerBusy = false;
+  }
+}
+
+ipcMain.handle("mailer:process", () => processOutbox());
+
 function createWindow(): void {
   const win = (mainWindow = new BrowserWindow({
     width: 1280,
@@ -122,6 +260,9 @@ app.whenReady().then(() => {
   db = openDb();
   imagesDir = path.join(app.getPath("userData"), "images");
   fs.mkdirSync(imagesDir, { recursive: true });
+  void backupDaily();
+  // Retry queued HQ emails in the background while the till runs.
+  setInterval(() => void processOutbox().catch(() => {}), 5 * 60_000);
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

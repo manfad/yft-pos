@@ -39,6 +39,7 @@ interface EditDraft {
   priceRM: number;
   image: string;
   active: boolean;
+  tracksTail: boolean;
   tiers: TierDraft[];
 }
 const editing = ref<EditDraft | null>(null);
@@ -80,6 +81,7 @@ function openAdd(): void {
     priceRM: 0,
     image: "",
     active: true,
+    tracksTail: false,
     tiers: [],
   };
 }
@@ -92,6 +94,7 @@ function openEdit(it: PricedItem): void {
     priceRM: toRM(it.priceCents),
     image: it.image,
     active: it.active,
+    tracksTail: it.tracksTail,
     tiers: it.tiers.map((t) => ({ minQtyUnits: toQty(t.minQtyMilli), priceRM: toRM(t.priceCents) })),
   };
 }
@@ -128,6 +131,7 @@ async function saveEdit(): Promise<void> {
         image: d.image,
         tint: tintFromName(d.name.trim()),
         priceCents,
+        tracksTail: d.tracksTail,
       });
       if (tiers.length) await repo.setTiers(created.id, tiers);
     } else {
@@ -137,6 +141,7 @@ async function saveEdit(): Promise<void> {
         image: d.image,
         priceCents,
         active: d.active,
+        tracksTail: d.tracksTail,
       });
       await repo.setTiers(d.id, tiers);
     }
@@ -156,7 +161,9 @@ async function saveEdit(): Promise<void> {
   <div class="flex-1 min-h-0 overflow-hidden p-24px flex flex-col gap-18px">
     <div class="flex items-center justify-between flex-none">
       <div class="text-23px font-800">Items &amp; Pricing</div>
-      <button class="btn-pay h-46px px-24px text-16px" @click="openAdd">+ Add item</button>
+      <div class="flex items-center gap-12px">
+        <button class="btn-pay h-46px px-24px text-16px" @click="openAdd">+ Add item</button>
+      </div>
     </div>
 
     <div class="flex gap-22px flex-1 min-h-0">
@@ -194,6 +201,11 @@ async function saveEdit(): Promise<void> {
                   <span v-if="!imageCss(it.image).startsWith('url')">{{ it.name.charAt(0).toUpperCase() }}</span>
                 </div>
                 <div class="text-16px font-800">{{ it.name }}</div>
+                <span
+                  v-if="it.tracksTail"
+                  class="text-12px font-800 rounded-full px-8px py-2px bg-[#eef0e0] text-olive border-2 border-olive whitespace-nowrap"
+                  title="Sold by Ekor"
+                >ekor</span>
               </div>
             </td>
             <td class="p-12px text-15px font-700">{{ it.unit }}</td>
@@ -266,7 +278,7 @@ async function saveEdit(): Promise<void> {
               Name
               <TextInput v-model="editing.name" title="Item name" placeholder="e.g. Durian" class="w-full" />
             </label>
-            <div class="flex gap-12px items-start">
+            <div class="flex gap-12px items-end">
               <div class="flex flex-col gap-4px text-13px font-700 text-muted">
                 Unit
                 <SelectInput v-model="editing.unit" :options="unitOptions" class="w-120px" />
@@ -275,6 +287,33 @@ async function saveEdit(): Promise<void> {
                 Price
                 <NumberInput v-model="editing.priceRM" title="Item price (RM)" prefix="RM" :decimals="2" class="w-130px" />
               </div>
+              <!-- sold by the head: surfaces a separate "ekor" counter on the till -->
+              <button
+                type="button"
+                class="h-44px px-16px rounded-12px border-2 text-15px font-800 cursor-pointer press flex items-center gap-8px"
+                :class="editing.tracksTail ? 'bg-olive text-white border-olive' : 'bg-tile text-muted border-border'"
+                :title="editing.tracksTail ? 'Cashier enters an Ekor count' : 'No Ekor count'"
+                @click="editing.tracksTail = !editing.tracksTail"
+              >
+                <span
+                  class="w-20px h-20px flex-none rounded-6px border-2 flex items-center justify-center"
+                  :class="editing.tracksTail ? 'bg-white border-white' : 'border-current'"
+                >
+                  <svg
+                    v-if="editing.tracksTail"
+                    viewBox="0 0 24 24"
+                    class="w-13px h-13px text-olive"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M5 13l4 4L19 7" />
+                  </svg>
+                </span>
+                Ekor
+              </button>
             </div>
           </div>
         </div>
@@ -330,4 +369,5 @@ async function saveEdit(): Promise<void> {
     @select="onPickImage"
     @close="imagePickerOpen = false"
   />
+
 </template>

@@ -4,29 +4,39 @@ import {
   SEED_COMPANIES,
   SEED_UNIT_TYPES,
   generateDemoOrders,
+  localDateStr,
 } from "@yf/core";
 import type { SqlDriver } from "./driver.js";
 import { SqlPosRepo } from "./sql-repo.js";
 
-/** Add `column` to `table` if it isn't already present (idempotent migration). */
+/**
+ * Add `column` to `table` if it isn't already present (idempotent migration).
+ * Returns true only when the column was actually added this call, so callers can
+ * run a one-time backfill on existing databases.
+ */
 async function ensureColumn(
   db: SqlDriver,
   table: string,
   column: string,
   ddl: string,
-): Promise<void> {
+): Promise<boolean> {
   const cols = await db.all(`PRAGMA table_info(${table})`);
-  if (!cols.some((c) => String(c.name) === column)) {
-    await db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
-  }
+  if (cols.some((c) => String(c.name) === column)) return false;
+  await db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  return true;
 }
 
-async function migratePaymentMethodNames(db: SqlDriver): Promise<void> {
+// The orders.method CHECK constraint is baked into the table and can't be
+// ALTERed, so widening it (Online Bank -> Bank rename, and adding 'Credit') means
+// rebuilding the table. Idempotent: only rebuilds when the stored DDL is stale.
+async function migrateOrdersMethod(db: SqlDriver): Promise<void> {
   const rows = await db.all(
     "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'orders'",
   );
   const sql = String(rows[0]?.sql ?? "");
-  if (!sql.includes("Online Bank")) return;
+  const needsRename = sql.includes("Online Bank");
+  const needsCredit = !sql.includes("'Credit'");
+  if (!needsRename && !needsCredit) return;
 
   await db.run("PRAGMA foreign_keys = OFF");
   await db.tx(async () => {
@@ -36,7 +46,7 @@ async function migratePaymentMethodNames(db: SqlDriver): Promise<void> {
         company_id  INTEGER NOT NULL DEFAULT 1,
         ts          INTEGER NOT NULL,
         total_cents INTEGER NOT NULL CHECK (total_cents >= 0),
-        method      TEXT    NOT NULL CHECK (method IN ('Cash','Bank','QR'))
+        method      TEXT    NOT NULL CHECK (method IN ('Cash','Bank','QR','Credit'))
       )
     `);
     await db.run(`
@@ -79,6 +89,24 @@ async function backfillBulkPricing(db: SqlDriver): Promise<void> {
   );
 }
 
+/**
+ * Stamp orders saved before business days existed with the local calendar day
+ * of their timestamp. Done in JS (not SQLite's 'localtime') because sql.js in
+ * wasm has no reliable local timezone. Idempotent — only NULL rows are touched.
+ */
+async function backfillBusinessDates(db: SqlDriver): Promise<void> {
+  const rows = await db.all("SELECT id, ts FROM orders WHERE business_date IS NULL");
+  if (rows.length === 0) return;
+  await db.tx(async () => {
+    for (const r of rows) {
+      await db.run("UPDATE orders SET business_date = ? WHERE id = ?", [
+        localDateStr(Number(r.ts)),
+        Number(r.id),
+      ]);
+    }
+  });
+}
+
 export interface InitOptions {
   /** Seed plausible historical orders for the Sales report (dev/demo). */
   seedDemoOrders?: boolean;
@@ -102,11 +130,33 @@ export async function initRepo(db: SqlDriver, opts: InitOptions = {}): Promise<S
   // Lightweight migration: CREATE TABLE IF NOT EXISTS won't add new columns to a
   // pre-existing DB, so backfill new columns on older local databases.
   await ensureColumn(db, "items", "company_id", "INTEGER NOT NULL DEFAULT 1");
+  const tracksTailAdded = await ensureColumn(db, "items", "tracks_tail", "INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(db, "orders", "company_id", "INTEGER NOT NULL DEFAULT 1");
   await ensureColumn(db, "order_items", "bulk_price", "INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(db, "order_items", "bulk_min_qty_milli", "INTEGER");
-  await migratePaymentMethodNames(db);
+  await ensureColumn(db, "order_items", "tail_count", "INTEGER NOT NULL DEFAULT 0");
+  await migrateOrdersMethod(db);
+  // Business-day + void columns go on *after* the orders-table rebuild above so
+  // a rebuild can never drop them.
+  await ensureColumn(db, "orders", "business_date", "TEXT");
+  await ensureColumn(db, "orders", "voided_at", "INTEGER");
+  // Index created here (not in SCHEMA_SQL) — on an old DB the column only
+  // exists after the ensureColumn above.
+  await db.run("CREATE INDEX IF NOT EXISTS idx_orders_bdate ON orders(business_date)");
+  await backfillBusinessDates(db);
   await backfillBulkPricing(db);
+
+  // When tracks_tail is first added to an existing DB, the seeded catalogue is
+  // already there (so the seed block below won't run). Mark the items that ship
+  // as tail-tracking (fish/chicken) once, by key — only on this first add, so a
+  // later admin toggle is never clobbered.
+  if (tracksTailAdded) {
+    const keys = SEED_ITEMS.filter((s) => s.tracksTail).map((s) => s.key);
+    if (keys.length) {
+      const placeholders = keys.map(() => "?").join(",");
+      await db.run(`UPDATE items SET tracks_tail = 1 WHERE key IN (${placeholders})`, keys);
+    }
+  }
 
   const repo = new SqlPosRepo(db);
 
@@ -129,6 +179,7 @@ export async function initRepo(db: SqlDriver, opts: InitOptions = {}): Promise<S
           unit: s.unit,
           tint: s.tint,
           priceCents: s.priceCents,
+          tracksTail: s.tracksTail ?? false,
         });
         if (s.tiers?.length) await repo.setTiers(item.id, s.tiers);
       }

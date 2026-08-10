@@ -1,22 +1,27 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { fmtMoney, fmtQtyUnit, periodRange, type Order, type Unit } from "@yf/core";
+import { fmtMoney, fmtQtyUnit, type Order, type Unit } from "@yf/core";
 import dayjs from "dayjs";
 import TopBar from "../components/TopBar.vue";
+import CreditsPanel from "../components/CreditsPanel.vue";
 import { getRepo } from "../db";
 import { currentCompany } from "../place";
 import { from, setToday } from "../salesDate";
-import { PAYMENT_UI } from "../payments";
 
 // Per-item sales for the date chosen in the top nav (shared `from`): the selected
 // day, and that month up to and including the selected day (month-to-date).
+// Grouped by *business day* (Close Day boundary), not wall-clock midnight, so
+// the printed/emailed daily report and this page always agree.
 const sel = computed(() => dayjs(from.value));
-const monthOrders = ref<Order[]>([]);
+const mtdOrders = ref<Order[]>([]);
 
 async function loadReport(): Promise<void> {
   const repo = await getRepo();
-  const [s, e] = periodRange("month", sel.value.toDate());
-  monthOrders.value = await repo.listOrders(s, e, currentCompany.value.id);
+  mtdOrders.value = await repo.listOrdersByBusinessDate(
+    sel.value.format("YYYY-MM-01"),
+    sel.value.format("YYYY-MM-DD"),
+    currentCompany.value.id,
+  );
 }
 onMounted(loadReport);
 // The report's date is transient: reset to today on leave so it never carries a
@@ -24,50 +29,41 @@ onMounted(loadReport);
 onUnmounted(setToday);
 watch([from, () => currentCompany.value.id], loadReport);
 
-const dayStart = computed(() => sel.value.startOf("day").valueOf());
-const dayEndExcl = computed(() => sel.value.startOf("day").add(1, "day").valueOf());
 const dayOrders = computed(() =>
-  monthOrders.value.filter((o) => o.ts >= dayStart.value && o.ts < dayEndExcl.value),
+  mtdOrders.value.filter((o) => o.businessDate === sel.value.format("YYYY-MM-DD")),
 );
-// monthOrders already starts at the 1st, so this is month-start .. end of the day.
-const mtdOrders = computed(() => monthOrders.value.filter((o) => o.ts < dayEndExcl.value));
 
 interface Row {
   key: string;
   name: string;
   unit: Unit;
   qtyMilli: number;
-  cash: number;
-  bank: number;
-  qr: number;
+  /** total head count ("ekor") sold for this item; 0 for non-ekor items */
+  tailCount: number;
   total: number;
 }
 
 function aggregate(orders: Order[]): Row[] {
   const map = new Map<string, Row>();
   for (const o of orders) {
+    if (o.voidedAt != null) continue; // cancelled sales don't report
     for (const li of o.items) {
       const key = li.itemId != null ? `id:${li.itemId}` : `name:${li.name}:${li.unit}`;
       let row = map.get(key);
       if (!row) {
-        row = { key, name: li.name, unit: li.unit, qtyMilli: 0, cash: 0, bank: 0, qr: 0, total: 0 };
+        row = { key, name: li.name, unit: li.unit, qtyMilli: 0, tailCount: 0, total: 0 };
         map.set(key, row);
       }
       row.qtyMilli += li.qtyMilli;
-      if (o.method === "Cash") row.cash += li.amountCents;
-      else if (o.method === "Bank") row.bank += li.amountCents;
-      else if (o.method === "QR") row.qr += li.amountCents;
+      row.tailCount += li.tailCount;
       row.total += li.amountCents;
     }
   }
   return [...map.values()].sort((a, b) => b.total - a.total);
 }
 
-const totals = (rows: Row[]): { cash: number; bank: number; qr: number; total: number } =>
-  rows.reduce(
-    (a, r) => ({ cash: a.cash + r.cash, bank: a.bank + r.bank, qr: a.qr + r.qr, total: a.total + r.total }),
-    { cash: 0, bank: 0, qr: 0, total: 0 },
-  );
+const totals = (rows: Row[]): { total: number } =>
+  rows.reduce((a, r) => ({ total: a.total + r.total }), { total: 0 });
 
 const panels = computed(() => [
   { kind: "day" as const, title: "Day", sub: sel.value.format("DD MMM YYYY"), rows: aggregate(dayOrders.value) },
@@ -86,71 +82,68 @@ const panels = computed(() => [
   <div class="flex-1 min-h-0 overflow-auto p-24px flex flex-col gap-18px">
     <div class="text-23px font-800 flex-none">Sales Report</div>
 
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-22px items-start">
-      <div
-        v-for="p in panels"
-        :key="p.kind"
-        class="bg-surface border-2 border-border rounded-22px p-24px flex flex-col gap-16px"
-      >
-        <div>
-          <div class="text-20px font-800">{{ p.title }}</div>
-          <div class="text-15px font-700 text-muted">{{ p.sub }}</div>
-        </div>
+    <!-- Day/Month report card (~60%) on the left, outstanding-credits panel on the right. -->
+    <div class="flex flex-col lg:flex-row gap-22px items-start">
+    <!-- Each panel is its own query container with a fluid base font-size, and
+         all the text/padding below is in `em` — so each table scales to fit the
+         width it actually has. `container-type: inline-size` also applies size
+         containment, which keeps a panel at its 50% grid track instead of
+         growing to fit the nowrap numbers (which made the two tables overlap). -->
+    <div class="w-full lg:w-3/5 bg-surface border-2 border-border rounded-22px p-24px">
+      <div class="grid grid-cols-2 gap-x-24px gap-y-16px">
+        <div
+          v-for="p in panels"
+          :key="p.kind"
+          class="flex flex-col gap-[1em] min-w-0"
+          style="container-type: inline-size; font-size: clamp(10px, 3.4cqi, 16px)"
+        >
+          <div>
+            <div class="text-[1.25em] font-800">{{ p.title }}</div>
+            <div class="text-[0.94em] font-700 text-muted">{{ p.sub }}</div>
+          </div>
 
         <table class="w-full border-collapse">
           <thead>
-            <tr class="text-12px font-800 text-faint uppercase tracking-wide">
-              <th class="text-left font-800 pb-12px">Item</th>
-              <th class="text-right font-800 pb-12px px-6px">Qty</th>
-              <th class="text-right font-800 pb-12px px-6px" :style="{ color: PAYMENT_UI.Cash.color }">Cash</th>
-              <th class="text-right font-800 pb-12px px-6px" :style="{ color: PAYMENT_UI.Bank.color }">Online</th>
-              <th class="text-right font-800 pb-12px px-6px" :style="{ color: PAYMENT_UI.QR.color }">QR</th>
-              <th class="text-right font-800 pb-12px pl-6px">Total</th>
+            <tr class="text-[0.72em] font-800 text-faint uppercase tracking-wide">
+              <th class="text-left font-800 pb-[0.7em]">Item</th>
+              <th class="text-right font-800 pb-[0.7em] px-[0.36em] text-olive">Ekor</th>
+              <th class="text-right font-800 pb-[0.7em] px-[0.36em]">Qty</th>
+              <th class="text-right font-800 pb-[0.7em] pl-[0.36em]">Amount</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="r in p.rows" :key="r.key" class="border-t-2 border-borderSoft">
-              <td class="py-10px pr-6px text-16px font-800 truncate">{{ r.name }}</td>
-              <td class="py-10px px-6px text-right text-16px font-800 text-muted whitespace-nowrap">
+              <td class="py-[0.6em] pr-[0.36em] text-[1em] font-800 truncate">{{ r.name }}</td>
+              <td class="py-[0.6em] px-[0.36em] text-right font-display text-[1.06em] font-700 whitespace-nowrap text-olive">
+                {{ r.tailCount || "—" }}
+              </td>
+              <td class="py-[0.6em] px-[0.36em] text-right text-[1em] font-800 text-muted whitespace-nowrap">
                 {{ fmtQtyUnit(r.qtyMilli, r.unit) }}
               </td>
-              <td class="py-10px px-6px text-right font-display text-17px font-600 whitespace-nowrap" :style="{ color: PAYMENT_UI.Cash.color }">
-                {{ r.cash ? fmtMoney(r.cash) : "—" }}
-              </td>
-              <td class="py-10px px-6px text-right font-display text-17px font-600 whitespace-nowrap" :style="{ color: PAYMENT_UI.Bank.color }">
-                {{ r.bank ? fmtMoney(r.bank) : "—" }}
-              </td>
-              <td class="py-10px px-6px text-right font-display text-17px font-600 whitespace-nowrap" :style="{ color: PAYMENT_UI.QR.color }">
-                {{ r.qr ? fmtMoney(r.qr) : "—" }}
-              </td>
-              <td class="py-10px pl-6px text-right font-display text-18px font-800 whitespace-nowrap text-ink">
+              <td class="py-[0.6em] pl-[0.36em] text-right font-display text-[1.12em] font-800 whitespace-nowrap text-ink">
                 {{ fmtMoney(r.total) }}
               </td>
             </tr>
             <tr v-if="!p.rows.length">
-              <td colspan="6" class="py-30px text-center text-16px font-700 text-faint">No sales yet.</td>
+              <td colspan="4" class="py-[1.9em] text-center text-[1em] font-700 text-faint">No sales yet.</td>
             </tr>
           </tbody>
           <tfoot v-if="p.rows.length">
             <tr class="border-t-2 border-border">
-              <td class="pt-12px text-15px font-800 uppercase tracking-wide text-muted">Total</td>
-              <td class="pt-12px px-6px" />
-              <td class="pt-12px px-6px text-right font-display text-17px font-700 whitespace-nowrap" :style="{ color: PAYMENT_UI.Cash.color }">
-                {{ fmtMoney(totals(p.rows).cash) }}
-              </td>
-              <td class="pt-12px px-6px text-right font-display text-17px font-700 whitespace-nowrap" :style="{ color: PAYMENT_UI.Bank.color }">
-                {{ fmtMoney(totals(p.rows).bank) }}
-              </td>
-              <td class="pt-12px px-6px text-right font-display text-17px font-700 whitespace-nowrap" :style="{ color: PAYMENT_UI.QR.color }">
-                {{ fmtMoney(totals(p.rows).qr) }}
-              </td>
-              <td class="pt-12px pl-6px text-right font-display text-19px font-800 whitespace-nowrap text-ink">
+              <td class="pt-[0.7em] text-[0.94em] font-800 uppercase tracking-wide text-muted">Total</td>
+              <td class="pt-[0.7em] px-[0.36em]" />
+              <td class="pt-[0.7em] px-[0.36em]" />
+              <td class="pt-[0.7em] pl-[0.36em] text-right font-display text-[1.18em] font-800 whitespace-nowrap text-ink">
                 {{ fmtMoney(totals(p.rows).total) }}
               </td>
             </tr>
           </tfoot>
         </table>
+        </div>
       </div>
+    </div>
+
+      <CreditsPanel class="w-full lg:flex-1" :company-id="currentCompany.id" />
     </div>
   </div>
 </template>

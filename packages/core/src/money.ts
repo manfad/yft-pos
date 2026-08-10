@@ -41,3 +41,13 @@ export function unitLabel(unit: Unit, milli?: Milli): string {
 /** Quantity with its (humanised) unit, e.g. "1.5 kg", "3 pcs", "1 pc". */
 export const fmtQtyUnit = (milli: Milli, unit: Unit): string =>
   `${fmtQty(milli)} ${unitLabel(unit, milli)}`;
+
+// Units sold by a measured amount (weight/volume), where the unit clarifies the
+// number. Discrete counts (box, bottle, pack, pieces, each) read fine on their
+// own, so we don't tack a unit onto those.
+const MEASURE_UNITS = new Set<Unit>(["kg"]);
+export const isMeasureUnit = (unit: Unit): boolean => MEASURE_UNITS.has(unit);
+
+/** Quantity, with the unit appended only for measured units (e.g. "1.5 kg"). */
+export const fmtQtySold = (milli: Milli, unit: Unit): string =>
+  isMeasureUnit(unit) ? fmtQtyUnit(milli, unit) : fmtQty(milli);

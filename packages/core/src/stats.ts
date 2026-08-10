@@ -21,14 +21,18 @@ export function computeStats(orders: Order[], period: Period): Stats {
     PAYMENT_METHODS.map((m) => [m, { count: 0, totalCents: 0 }]),
   ) as Record<PaymentMethod, { count: number; totalCents: number }>;
 
+  // Voided (cancelled) sales never count toward totals.
   let totalCents = 0;
+  let count = 0;
   for (const o of orders) {
+    if (o.voidedAt != null) continue;
+    count++;
     totalCents += o.totalCents;
     const bucket = byMethod[o.method];
     bucket.count++;
     bucket.totalCents += o.totalCents;
   }
-  return { period, count: orders.length, totalCents, byMethod };
+  return { period, count, totalCents, byMethod };
 }
 
 /** Per-product roll-up: how much of each item sold and what it earned. */
@@ -39,6 +43,8 @@ export interface ItemSale {
   tint: string;
   unit: Unit;
   qtyMilli: Milli;
+  /** total head count ("ekor") sold; 0 for items that don't track tails */
+  tailCount: number;
   amountCents: Cents;
   /** number of sale lines this item appeared in */
   lines: number;
@@ -52,11 +58,13 @@ export interface ItemSale {
 export function aggregateItemSales(orders: Order[]): ItemSale[] {
   const map = new Map<string, ItemSale>();
   for (const o of orders) {
+    if (o.voidedAt != null) continue; // cancelled sales sold nothing
     for (const l of o.items) {
       const key = l.itemId != null ? `id:${l.itemId}` : `name:${l.name}:${l.unit}`;
       const cur = map.get(key);
       if (cur) {
         cur.qtyMilli += l.qtyMilli;
+        cur.tailCount += l.tailCount;
         cur.amountCents += l.amountCents;
         cur.lines += 1;
       } else {
@@ -67,6 +75,7 @@ export function aggregateItemSales(orders: Order[]): ItemSale[] {
           tint: l.tint,
           unit: l.unit,
           qtyMilli: l.qtyMilli,
+          tailCount: l.tailCount,
           amountCents: l.amountCents,
           lines: 1,
         });

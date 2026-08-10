@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS items (
   unit   TEXT    NOT NULL DEFAULT 'each',
   tint   TEXT    NOT NULL DEFAULT '#eee',
   price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
-  active INTEGER NOT NULL DEFAULT 1
+  active INTEGER NOT NULL DEFAULT 1,
+  tracks_tail INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS price_tiers (
@@ -34,11 +35,51 @@ CREATE TABLE IF NOT EXISTS price_tiers (
 );
 
 CREATE TABLE IF NOT EXISTS orders (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  company_id  INTEGER NOT NULL DEFAULT 1,
-  ts          INTEGER NOT NULL,
-  total_cents INTEGER NOT NULL CHECK (total_cents >= 0),
-  method      TEXT    NOT NULL CHECK (method IN ('Cash','Bank','QR'))
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id    INTEGER NOT NULL DEFAULT 1,
+  ts            INTEGER NOT NULL,
+  business_date TEXT,
+  total_cents   INTEGER NOT NULL CHECK (total_cents >= 0),
+  method        TEXT    NOT NULL CHECK (method IN ('Cash','Bank','QR','Credit')),
+  voided_at     INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS day_closes (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id    INTEGER NOT NULL DEFAULT 1,
+  business_date TEXT    NOT NULL,
+  closed_at     INTEGER NOT NULL,
+  auto          INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (company_id, business_date)
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS outbox (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id      INTEGER NOT NULL DEFAULT 1,
+  business_date   TEXT    NOT NULL,
+  subject         TEXT    NOT NULL,
+  body            TEXT    NOT NULL,
+  attachment_name TEXT,
+  attachment_b64  TEXT,
+  created_at      INTEGER NOT NULL,
+  sent_at         INTEGER,
+  attempts        INTEGER NOT NULL DEFAULT 0,
+  last_error      TEXT
+);
+
+CREATE TABLE IF NOT EXISTS credits (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id   INTEGER NOT NULL DEFAULT 1,
+  order_id     INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  name         TEXT    NOT NULL,
+  amount_cents INTEGER NOT NULL CHECK (amount_cents >= 0),
+  date         INTEGER NOT NULL,
+  is_clear     INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS order_items (
@@ -51,15 +92,19 @@ CREATE TABLE IF NOT EXISTS order_items (
   tint  TEXT NOT NULL DEFAULT '#eee',
   price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
   qty_milli   INTEGER NOT NULL CHECK (qty_milli > 0),
+  tail_count  INTEGER NOT NULL DEFAULT 0 CHECK (tail_count >= 0),
   bulk_price  INTEGER NOT NULL DEFAULT 0,
   bulk_min_qty_milli INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_orders_ts       ON orders(ts);
+CREATE INDEX IF NOT EXISTS idx_outbox_unsent    ON outbox(sent_at);
 CREATE INDEX IF NOT EXISTS idx_orders_company   ON orders(company_id);
 CREATE INDEX IF NOT EXISTS idx_items_company     ON items(company_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_oid ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_price_tiers_iid ON price_tiers(item_id);
+CREATE INDEX IF NOT EXISTS idx_credits_company ON credits(company_id);
+CREATE INDEX IF NOT EXISTS idx_credits_open ON credits(company_id, is_clear);
 `;
 
 // Companies/tenants seeded into the companies lookup (ids 1, 2, 3 in order).
@@ -75,6 +120,8 @@ export interface SeedItem {
   tint: string;
   priceCents: number;
   image: string;
+  /** sold by the head — capture a tail/"ekor" count alongside weight */
+  tracksTail?: boolean;
   /** optional quantity breaks */
   tiers?: Array<{ minQtyMilli: number; priceCents: number }>;
 }
@@ -83,8 +130,8 @@ export interface SeedItem {
 // to their emoji + name on the tile. Prices/units marked TODO need confirming.
 export const SEED_ITEMS: SeedItem[] = [
   // Ikan Tilapia: RM25/kg, wholesale break >= 10 kg -> RM23/kg.
-  { key: "tilapia", name: "Ikan Tilapia", unit: "kg", tint: "#d6e4ec", priceCents: 2500, image: "/images/talapia", tiers: [{ minQtyMilli: 10000, priceCents: 2300 }] },
-  { key: "ayam", name: "Ayam", unit: "kg", tint: "#f7ddc4", priceCents: 3000, image: "" },
+  { key: "tilapia", name: "Ikan Tilapia", unit: "kg", tint: "#d6e4ec", priceCents: 2500, image: "/images/talapia", tracksTail: true, tiers: [{ minQtyMilli: 10000, priceCents: 2300 }] },
+  { key: "ayam", name: "Ayam", unit: "kg", tint: "#f7ddc4", priceCents: 3000, image: "", tracksTail: true },
   { key: "fresh_milk_500", name: "Fresh Milk 500 ml", unit: "bottle", tint: "#eee9df", priceCents: 0, image: "/images/milk" }, // TODO price
   { key: "fresh_milk_1l", name: "Fresh Milk 1 L", unit: "bottle", tint: "#e7efd9", priceCents: 680, image: "/images/milk" },
   { key: "uht_200ml", name: "UHT 200 ml", unit: "pack", tint: "#d8e8ec", priceCents: 200, image: "" },

@@ -22,6 +22,48 @@ describe("SqlPosRepo over sql.js", () => {
     repo = await freshRepo();
   });
 
+  it("backfills tracks_tail when the column is first added to an existing DB", async () => {
+    // Simulate a pre-tracks_tail database: an items table without the column,
+    // already populated, so the seed block won't run on init.
+    const SQL = await initSqlJs();
+    const db = new SQL.Database();
+    const driver = createSqlJsDriver(db as never);
+    await driver.run(
+      `CREATE TABLE items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, company_id INTEGER NOT NULL DEFAULT 1,
+        key TEXT NOT NULL UNIQUE, name TEXT NOT NULL, image TEXT NOT NULL DEFAULT '',
+        unit TEXT NOT NULL DEFAULT 'each', tint TEXT NOT NULL DEFAULT '#eee',
+        price_cents INTEGER NOT NULL CHECK (price_cents >= 0), active INTEGER NOT NULL DEFAULT 1)`,
+    );
+    await driver.run("INSERT INTO items (key, name, unit, price_cents) VALUES ('tilapia','Ikan Tilapia','kg',2500)");
+    await driver.run("INSERT INTO items (key, name, unit, price_cents) VALUES ('fresh_milk_1l','Fresh Milk 1 L','bottle',680)");
+
+    const r = await initRepo(driver);
+    expect((await r.getItemByKey("tilapia"))!.tracksTail).toBe(true);
+    expect((await r.getItemByKey("fresh_milk_1l"))!.tracksTail).toBe(false);
+  });
+
+  it("widens the orders.method CHECK so Credit works on a pre-Credit DB", async () => {
+    const SQL = await initSqlJs();
+    const db = new SQL.Database();
+    const driver = createSqlJsDriver(db as never);
+    // Old orders table: CHECK without 'Credit'. CREATE TABLE IF NOT EXISTS in init
+    // won't replace it, so the migration must rebuild it.
+    await driver.run(
+      `CREATE TABLE orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, company_id INTEGER NOT NULL DEFAULT 1,
+        ts INTEGER NOT NULL, total_cents INTEGER NOT NULL CHECK (total_cents >= 0),
+        method TEXT NOT NULL CHECK (method IN ('Cash','Bank','QR')))`,
+    );
+    const r = await initRepo(driver);
+    const fish = (await r.getItemByKey("tilapia"))!;
+    const order = await createOrder(r, {
+      method: "Credit", creditorName: "Pak Abu", lines: [{ itemId: fish.id, qtyMilli: 1000, tailCount: 1 }],
+    });
+    expect(order.method).toBe("Credit");
+    expect(await r.listCredits(1, { outstandingOnly: true })).toHaveLength(1);
+  });
+
   it("seeds the catalogue with tiers", async () => {
     const items = await repo.listItems();
     expect(items.length).toBe(10);
@@ -50,6 +92,59 @@ describe("SqlPosRepo over sql.js", () => {
     await repo.updateItem(fish.id, { priceCents: 9999 });
     const again = (await repo.getOrder(order.id))!;
     expect(again.items[0]!.priceCents).toBe(2300);
+  });
+
+  it("seeds tracksTail and round-trips a tail count, independent of qty", async () => {
+    const fish = (await repo.getItemByKey("tilapia"))!;
+    expect(fish.tracksTail).toBe(true); // fish/chicken are seeded as tail-tracking
+    const milk = (await repo.getItemByKey("fresh_milk_1l"))!;
+    expect(milk.tracksTail).toBe(false);
+
+    const order = await createOrder(repo, {
+      method: "Cash",
+      ts: 1000,
+      lines: [
+        { itemId: fish.id, qtyMilli: 12000, tailCount: 38 },
+        { itemId: milk.id, qtyMilli: 2000, tailCount: 99 }, // ignored: not tracksTail
+      ],
+    });
+    const stored = (await repo.getOrder(order.id))!;
+    const fishLine = stored.items.find((l) => l.itemId === fish.id)!;
+    const milkLine = stored.items.find((l) => l.itemId === milk.id)!;
+    expect(fishLine).toMatchObject({ qtyMilli: 12000, tailCount: 38 });
+    expect(milkLine.tailCount).toBe(0); // non-tracking item never stores a tail
+  });
+
+  it("records, lists and clears credits for a pay-later sale", async () => {
+    const fish = (await repo.getItemByKey("tilapia"))!;
+    const o1 = await createOrder(repo, {
+      method: "Credit", ts: 1000, creditorName: "Pak Abu",
+      lines: [{ itemId: fish.id, qtyMilli: 2000, tailCount: 2 }],
+    });
+    const o2 = await createOrder(repo, {
+      method: "Credit", ts: 2000, creditorName: "Pak Abu",
+      lines: [{ itemId: fish.id, qtyMilli: 1000, tailCount: 1 }],
+    });
+    // A Cash sale never produces a credit.
+    await createOrder(repo, { method: "Cash", ts: 3000, lines: [{ itemId: fish.id, qtyMilli: 1000, tailCount: 1 }] });
+
+    // Credit orders carry the creditor name; cash orders don't.
+    expect(o1.creditorName).toBe("Pak Abu");
+    expect((await repo.getOrder(o1.id))!.creditorName).toBe("Pak Abu");
+    const listed = await repo.listOrders(0, 9999, 1);
+    expect(listed.find((o) => o.method === "Cash")!.creditorName).toBeUndefined();
+
+    const open = await repo.listCredits(1, { outstandingOnly: true });
+    expect(open).toHaveLength(2);
+    expect(open.map((c) => c.orderId).sort()).toEqual([o1.id, o2.id].sort());
+    expect(open.every((c) => c.name === "Pak Abu" && c.clearedAt === null)).toBe(true);
+    expect(open.find((c) => c.orderId === o1.id)!.amountCents).toBe(o1.totalCents);
+
+    await repo.clearCreditsByName("Pak Abu", 9999, 1);
+    expect(await repo.listCredits(1, { outstandingOnly: true })).toHaveLength(0);
+    const all = await repo.listCredits(1);
+    expect(all).toHaveLength(2);
+    expect(all.every((c) => c.clearedAt === 9999)).toBe(true);
   });
 
   it("base price applies below the tier threshold", async () => {
@@ -166,5 +261,105 @@ describe("bulk-pricing backfill migration", () => {
     const order = (await repo.getOrder(oid))!;
     expect(order.items[0]!.bulkPrice).toBe(false);
     expect(order.items[0]!.bulkMinQtyMilli).toBeUndefined();
+  });
+});
+
+describe("Close Day, void, settings, outbox", () => {
+  let repo: SqlPosRepo;
+  beforeEach(async () => {
+    repo = await freshRepo();
+  });
+
+  async function sell(businessDate: string, ts: number): Promise<number> {
+    const fish = (await repo.getItemByKey("tilapia"))!;
+    const o = await createOrder(repo, {
+      method: "Cash",
+      ts,
+      businessDate,
+      companyId: 1,
+      lines: [{ itemId: fish.id, qtyMilli: 1000, tailCount: 1 }],
+    });
+    return o.id;
+  }
+
+  it("stamps business_date on orders (default: ts's local day)", async () => {
+    const fish = (await repo.getItemByKey("tilapia"))!;
+    const ts = new Date(2026, 6, 13, 9, 0).getTime();
+    const o = await createOrder(repo, {
+      method: "Cash",
+      ts,
+      lines: [{ itemId: fish.id, qtyMilli: 1000, tailCount: 1 }],
+    });
+    expect(o.businessDate).toBe("2026-07-13");
+    expect(o.voidedAt).toBeNull();
+  });
+
+  it("closes a day once and refuses a second close", async () => {
+    const c = await repo.closeDay("2026-07-13", { companyId: 1, at: 123 });
+    expect(c.businessDate).toBe("2026-07-13");
+    expect(c.auto).toBe(false);
+    await expect(repo.closeDay("2026-07-13", { companyId: 1 })).rejects.toThrow(/already closed/);
+  });
+
+  it("reopenDay pulls same-calendar-day pushed sales back", async () => {
+    const dayTs = new Date(2026, 6, 13, 12, 0).getTime();
+    await sell("2026-07-13", dayTs);
+    await repo.closeDay("2026-07-13", { companyId: 1 });
+    // Sale after close, same calendar day -> stamped to the 14th.
+    const lateTs = new Date(2026, 6, 13, 17, 0).getTime();
+    const pushedId = await sell("2026-07-14", lateTs);
+    // A genuine next-day sale must NOT be pulled back on reopen.
+    const nextDayId = await sell("2026-07-14", new Date(2026, 6, 14, 9, 0).getTime());
+
+    await repo.reopenDay("2026-07-13", 1);
+    expect(await repo.getDayClose("2026-07-13", 1)).toBeNull();
+    expect((await repo.getOrder(pushedId))!.businessDate).toBe("2026-07-13");
+    expect((await repo.getOrder(nextDayId))!.businessDate).toBe("2026-07-14");
+  });
+
+  it("lists unclosed past days with orders", async () => {
+    await sell("2026-07-11", new Date(2026, 6, 11, 10, 0).getTime());
+    await sell("2026-07-12", new Date(2026, 6, 12, 10, 0).getTime());
+    await repo.closeDay("2026-07-11", { companyId: 1 });
+    expect(await repo.listUnclosedDays("2026-07-13", 1)).toEqual(["2026-07-12"]);
+  });
+
+  it("voidOrder excludes the sale from stats and drops its credit", async () => {
+    const fish = (await repo.getItemByKey("tilapia"))!;
+    const o = await createOrder(repo, {
+      method: "Credit",
+      creditorName: "Ah Seng",
+      ts: new Date(2026, 6, 13, 10, 0).getTime(),
+      businessDate: "2026-07-13",
+      lines: [{ itemId: fish.id, qtyMilli: 2000, tailCount: 2 }],
+    });
+    expect((await repo.listCredits(1, { outstandingOnly: true })).length).toBe(1);
+
+    await repo.voidOrder(o.id, Date.now());
+    const voided = (await repo.getOrder(o.id))!;
+    expect(voided.voidedAt).not.toBeNull();
+    expect((await repo.listCredits(1, { outstandingOnly: true })).length).toBe(0);
+
+    const day = await repo.listOrdersByBusinessDate("2026-07-13", "2026-07-13", 1);
+    expect(day.length).toBe(1); // still listed (marked void) ...
+    expect(computeStats(day, "today").totalCents).toBe(0); // ... but earns nothing
+  });
+
+  it("settings upsert and outbox queue round-trip", async () => {
+    expect(await repo.getSetting("pin")).toBeNull();
+    await repo.setSetting("pin", "1234");
+    await repo.setSetting("pin", "9999");
+    expect(await repo.getSetting("pin")).toBe("9999");
+
+    const id = await repo.queueEmail({
+      businessDate: "2026-07-13",
+      subject: "Daily sales",
+      body: "hello",
+      attachmentName: "sales.xlsx",
+      attachmentB64: "AAAA",
+    });
+    const rows = await repo.listOutbox("2026-07-13");
+    expect(rows[0]!.id).toBe(id);
+    expect(rows[0]!.sentAt).toBeNull();
   });
 });

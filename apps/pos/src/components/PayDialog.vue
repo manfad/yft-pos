@@ -3,7 +3,8 @@ import { fmtMoney, PAYMENT_METHODS, type PaymentMethod } from "@yf/core";
 import { PAYMENT_UI } from "../payments";
 
 defineProps<{ open: boolean; totalCents: number }>();
-defineEmits<{ confirm: [method: PaymentMethod]; close: [] }>();
+// "Credit" is special: it opens the creditor picker rather than settling here.
+defineEmits<{ confirm: [method: PaymentMethod]; credit: []; close: [] }>();
 </script>
 
 <template>
@@ -23,13 +24,14 @@ defineEmits<{ confirm: [method: PaymentMethod]; close: [] }>();
           v-for="m in PAYMENT_METHODS"
           :key="m"
           class="flex items-center gap-18px px-24px py-18px rounded-18px border-2 border-border bg-tile cursor-pointer text-left transition-transform active:translate-y-2px"
-          @click="$emit('confirm', m)"
+          @click="m === 'Credit' ? $emit('credit') : $emit('confirm', m)"
         >
           <span
             class="w-60px h-60px flex-none rounded-16px flex items-center justify-center text-30px"
             :style="{ background: PAYMENT_UI[m].tint }"
           >{{ PAYMENT_UI[m].icon }}</span>
           <span class="text-25px font-800 text-ink uppercase">{{ m }}</span>
+          <span v-if="m === 'Credit'" class="ml-auto text-15px font-800 text-muted">pay later ›</span>
         </button>
       </div>
       <div class="px-28px pb-26px">
