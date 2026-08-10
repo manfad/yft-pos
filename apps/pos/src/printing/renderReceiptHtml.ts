@@ -108,7 +108,7 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
     gap: 0.6mm;
     overflow-wrap: anywhere;
   }
-  .item-name { font-size: 7pt; font-weight: 400; }
+  .item-name { font-size: 7pt; font-weight: 700; }
   .item-rate {
     color: #333;
     font-size: 6.7pt;
@@ -139,6 +139,7 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
     font-size: 7.5pt;
     margin-top: 2mm;
   }
+  .pay-method { font-weight: 700; }
   .foot {
     text-align: center;
     font-size: 7.2pt;
@@ -156,7 +157,7 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
     ${rows}
     <div class="hr"></div>
     <div class="total"><span>TOTAL</span><span>${esc(r.totalText)}</span></div>
-    <div class="pay"><span>${r.itemCount} item(s)</span><span>Paid: ${esc(r.method)}</span></div>
+    <div class="pay"><span>${r.itemCount} item(s)</span><span class="pay-method">Paid: ${esc(r.method)}</span></div>
     <div class="foot">${esc(r.footer)}</div>
   </div>
 </body>

@@ -92,6 +92,15 @@ const todayCredits = valid
   .map((o) => ({ date: DATE, inv: o.inv, name: o.creditor, amount: orderTotal(o) }));
 const allCredits = [...todayCredits, ...oldCredits].sort((a, b) => b.date.localeCompare(a.date) || b.inv - a.inv);
 
+const byCreditor = new Map();
+for (const c of allCredits) {
+  const cur = byCreditor.get(c.name) ?? { count: 0, amount: 0 };
+  cur.count += 1;
+  cur.amount = round2(cur.amount + c.amount);
+  byCreditor.set(c.name, cur);
+}
+const creditors = [...byCreditor.entries()].sort((a, b) => b[1].amount - a[1].amount);
+
 // ------------------------------------------------------------ batch helpers
 const cmds = [];
 const cell = (sheet, ref, props) =>
@@ -158,8 +167,9 @@ r += 2;
 cell(S2, `A${r}`, { value: "BY PAYMENT", bold: true, fill: "D9E2DC", merge: `A${r}:C${r}` });
 r++;
 for (const [method, m] of byMethod) {
-  cell(S2, `A${r}`, { value: `${method} (${m.count})` });
-  cell(S2, `C${r}`, { value: m.amount, numberformat: MONEY });
+  cell(S2, `A${r}`, { value: method });
+  cell(S2, `C${r}`, { value: m.count, halign: "right" });
+  cell(S2, `D${r}`, { value: m.amount, numberformat: MONEY });
   r++;
 }
 cell(S2, `A${r}`, { value: `${valid.length} sale(s), ${orders.length - valid.length} voided`, "font.color": "666666" });
@@ -262,6 +272,22 @@ cell(S5, "A4", { value: `ADDED TODAY — ${DATE}`, bold: true, fill: "FFF2CC", m
 r = creditRows(5, todayCredits);
 r += 2;
 cell(S5, `A${r}`, { value: "ALL OUTSTANDING", bold: true, fill: "E2EFDA", merge: `A${r}:D${r}` });
-creditRows(r + 1, allCredits);
+r = creditRows(r + 1, allCredits);
+r += 2;
+// Outstanding balance per creditor — who owes what across every invoice.
+cell(S5, `A${r}`, { value: "BY CREDITOR", bold: true, fill: "D9E2DC", merge: `A${r}:D${r}` });
+r++;
+header(S5, r, [["A", "Name"], ["C", "Invoices", "right"], ["D", "Amount (RM)", "right"]]);
+r++;
+const creditorFirst = r;
+for (const [name, t] of creditors) {
+  cell(S5, `A${r}`, { value: name });
+  cell(S5, `C${r}`, { value: t.count, halign: "right" });
+  cell(S5, `D${r}`, { value: t.amount, numberformat: MONEY });
+  r++;
+}
+cell(S5, `A${r}`, { value: "TOTAL", bold: true, "border.top": "double" });
+["B", "C"].forEach((c) => cell(S5, `${c}${r}`, { "border.top": "double" }));
+cell(S5, `D${r}`, { formula: `SUM(D${creditorFirst}:D${r - 1})`, numberformat: MONEY, bold: true, "border.top": "double" });
 
 process.stdout.write(JSON.stringify(cmds));

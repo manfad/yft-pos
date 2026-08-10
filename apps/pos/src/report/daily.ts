@@ -127,7 +127,7 @@ function todaySalesSheet(orders: Order[]): XLSX.WorkSheet {
   rows.push(["BY PAYMENT"]);
   for (const method of PAYMENT_METHODS) {
     const bucket = stats.byMethod[method];
-    if (bucket.count) rows.push([`${method} (${bucket.count})`, "", "", toRM(bucket.totalCents)]);
+    if (bucket.count) rows.push([method, "", bucket.count, toRM(bucket.totalCents)]);
   }
   if (voided.length) {
     rows.push([
@@ -224,9 +224,26 @@ function creditSheet(orders: Order[], outstanding: Credit[]): XLSX.WorkSheet {
   }
   rows.push(["TOTAL", "", "", 0]);
   const outTotal = rows.length;
+  // Outstanding balance per creditor — who owes what across every invoice.
+  rows.push([]);
+  rows.push(["BY CREDITOR"]);
+  rows.push(["Name", "", "Invoices", "Amount (RM)"]);
+  const byCreditor = new Map<string, { count: number; cents: number }>();
+  for (const credit of sorted) {
+    const cur = byCreditor.get(credit.name) ?? { count: 0, cents: 0 };
+    cur.count += 1;
+    cur.cents += credit.amountCents;
+    byCreditor.set(credit.name, cur);
+  }
+  const creditors = [...byCreditor.entries()].sort((a, b) => b[1].cents - a[1].cents);
+  const creditorFirst = rows.length + 1;
+  for (const [name, t] of creditors) rows.push([name, "", t.count, toRM(t.cents)]);
+  rows.push(["TOTAL", "", "", 0]);
+  const creditorTotal = rows.length;
   const sheet = XLSX.utils.aoa_to_sheet(rows);
   setFormulaOrZero(sheet, `D${todayTotal}`, "D", todayFirst, today.length);
   setFormulaOrZero(sheet, `D${outTotal}`, "D", outFirst, sorted.length);
+  setFormulaOrZero(sheet, `D${creditorTotal}`, "D", creditorFirst, creditors.length);
   setNumberFormat(sheet, 3, 0, rows.length, "0.00");
   sheet["!cols"] = [{ wch: 13 }, { wch: 11 }, { wch: 24 }, { wch: 14 }];
   return sheet;

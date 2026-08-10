@@ -105,10 +105,9 @@ describe("daily Excel workbook (template v2)", () => {
     expect(today[0]).toEqual([...TODAY_SALES_HEADERS]);
     expect(today[1]).toEqual(["Ikan Tilapia", 25, "2.5 kg", 62.5]);
     expect(workbook.Sheets["Today Sales"]!["D5"]?.f).toBe("SUM(D2:D4)");
-    const flat = today.flat();
-    expect(flat).toContain("Cash (1)");
-    expect(flat).toContain("Credit (1)");
-    expect(flat).toContain("Voided: 1 sale(s)");
+    expect(today).toContainEqual(["Cash", "", 1, 69.3]);
+    expect(today).toContainEqual(["Credit", "", 1, 12]);
+    expect(today.flat()).toContain("Voided: 1 sale(s)");
   });
 
   it("lists only fish sales with the ekor count as qty", () => {
@@ -130,6 +129,8 @@ describe("daily Excel workbook (template v2)", () => {
     expect(credit[2]).toEqual(["2026-08-10", 102, "Pak Abu", 12]);
     expect(credit[5]?.[0]).toBe("ALL OUTSTANDING");
     expect(credit[7]).toEqual(["2026-08-07", 95, "Restoran Selera", 240]);
+    expect(credit[10]?.[0]).toBe("BY CREDITOR");
+    expect(credit[12]).toEqual(["Restoran Selera", "", 1, 240]);
   });
 
   it("writes a valid xlsx attachment", () => {
