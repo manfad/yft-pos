@@ -54,8 +54,9 @@ tests and type checks, then creates the Windows installer and portable app in
 To also update the installed kiosk app (`C:\Program Files\Yun Fook POS`), run
 `update-windows.cmd` instead — it builds exactly as above and, only if
 everything passed, silently reinstalls and relaunches the till. Over SSH use
-`update-windows.cmd /reboot`, which restarts the machine so the app comes back
-in kiosk mode on the console.
+`update-windows.cmd reboot` (no slash — Git Bash rewrites `/reboot` into a
+path), which restarts the machine so the app comes back in kiosk mode on the
+console.
 
 Data persists to IndexedDB; on a fresh DB the catalogue + demo orders are
 seeded so the Sales report has content. Admin → **Reset demo data** wipes it.

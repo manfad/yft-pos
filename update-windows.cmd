@@ -7,8 +7,10 @@ rem touches the installed app when all of that passes — a broken build can nev
 rem take the till down mid-trial.
 rem
 rem   update-windows.cmd          build + reinstall + relaunch (run at the machine)
-rem   update-windows.cmd /reboot  build + reinstall + reboot (for SSH updates: the
-rem                               app auto-starts into kiosk mode on boot)
+rem   update-windows.cmd reboot   build + reinstall + reboot (for SSH updates: the
+rem                               app auto-starts into kiosk mode on boot; spelled
+rem                               without a slash because Git Bash rewrites /reboot
+rem                               into a path when invoked over SSH)
 cd /d "%~dp0"
 
 call build-windows.cmd
@@ -36,12 +38,14 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if /I "%~1"=="/reboot" (
-  echo UPDATE COMPLETE - rebooting into the kiosk...
-  shutdown /r /t 5
-  exit /b 0
-)
+if /I "%~1"=="reboot" goto reboot
+if /I "%~1"=="/reboot" goto reboot
 
 echo UPDATE COMPLETE - starting the app...
 start "" "C:\Program Files\Yun Fook POS\Yun Fook POS.exe"
+exit /b 0
+
+:reboot
+echo UPDATE COMPLETE - rebooting into the kiosk...
+shutdown /r /t 5
 exit /b 0
