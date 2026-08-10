@@ -11,31 +11,37 @@ if errorlevel 1 (
   exit /b 1
 )
 
-where pnpm >nul 2>nul
-if errorlevel 1 (
-  echo ERROR: pnpm is not installed or is not on PATH.
-  echo Install it once with: corepack enable
-  exit /b 1
-)
-
 echo [1/5] Pulling latest main branch...
 git pull --ff-only
 if errorlevel 1 exit /b 1
 
+set "PNPM_CMD=pnpm"
+where pnpm >nul 2>nul
+if errorlevel 1 (
+  where corepack >nul 2>nul
+  if errorlevel 1 (
+    echo ERROR: pnpm and Corepack are not installed or are not on PATH.
+    echo Install Node.js 22 LTS, reconnect SSH, then run this script again.
+    exit /b 1
+  )
+  echo pnpm is not on PATH; using Corepack to run the repository's pinned pnpm version...
+  set "PNPM_CMD=corepack pnpm"
+)
+
 echo [2/5] Installing locked dependencies...
-call pnpm install --frozen-lockfile
+call %PNPM_CMD% install --frozen-lockfile
 if errorlevel 1 exit /b 1
 
 echo [3/5] Running tests...
-call pnpm test
+call %PNPM_CMD% test
 if errorlevel 1 exit /b 1
 
 echo [4/5] Checking TypeScript and Vue...
-call pnpm typecheck
+call %PNPM_CMD% typecheck
 if errorlevel 1 exit /b 1
 
 echo [5/5] Building Windows installer and portable app...
-call pnpm --filter @yf/pos dist:win
+call %PNPM_CMD% --filter @yf/pos dist:win
 if errorlevel 1 exit /b 1
 
 echo.

@@ -37,11 +37,15 @@ pnpm build       # type-checked production build of the SPA
 
 ### Update and build on Windows over SSH
 
-From the repository folder, run:
+From the repository folder, run in Command Prompt:
 
 ```bat
 build-windows.cmd
 ```
+
+In Git Bash use `./build-windows.cmd`; in PowerShell use
+`.\build-windows.cmd`. If `pnpm` is not on `PATH`, the script automatically
+runs the repository's pinned pnpm version through Corepack.
 
 The script pulls with `--ff-only`, installs the locked dependencies, runs the
 tests and type checks, then creates the Windows installer and portable app in

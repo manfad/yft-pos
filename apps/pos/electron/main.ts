@@ -234,20 +234,29 @@ async function processOutbox(): Promise<{ sent: number; pending: number; lastErr
 
 ipcMain.handle("mailer:process", () => processOutbox());
 
+const POS_ZOOM_FACTOR = 0.7;
+
 function createWindow(): void {
   const win = (mainWindow = new BrowserWindow({
     width: 1024,
     height: 768,
     minWidth: 960,
     minHeight: 700,
+    // Keep local development easy to exit; packaged cashier builds are locked down.
+    kiosk: app.isPackaged,
     backgroundColor: "#f3ece0",
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      zoomFactor: POS_ZOOM_FACTOR,
     },
   }));
+  win.setMenu(null);
+  win.webContents.on("did-finish-load", () => {
+    win.webContents.setZoomFactor(POS_ZOOM_FACTOR);
+  });
   win.on("closed", () => {
     mainWindow = null;
   });
