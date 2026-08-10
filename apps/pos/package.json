@@ -38,6 +38,10 @@
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
+    "nsis": {
+      "perMachine": true,
+      "runAfterFinish": false
+    },
     "linux": {
       "target": [
         "AppImage",

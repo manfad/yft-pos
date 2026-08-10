@@ -328,6 +328,18 @@ function createWindow(): void {
   else void win.loadFile(path.join(__dirname, "../dist/index.html"));
 }
 
+// Kiosk machine: a second launch (double-clicked shortcut, auto-start race)
+// must focus the running till, never open a second window over it.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+}
+app.on("second-instance", () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
+
 app.whenReady().then(() => {
   loadDotEnv();
   dbPath = path.join(app.getPath("userData"), "yft-pos.sqlite");
