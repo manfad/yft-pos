@@ -189,9 +189,9 @@ function loadDotEnv(): void {
       continue;
     }
     for (const line of text.split(/\r?\n/)) {
-      const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/.exec(line);
+      const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/.exec(line);
       if (!m || line.trim().startsWith("#")) continue;
-      const value = m[2]!.replace(/^["']|["']$/g, "");
+      const value = m[2]!.trim().replace(/^["']|["']$/g, "");
       if (!(m[1]! in dotEnv)) dotEnv[m[1]!] = value;
     }
   }
@@ -248,7 +248,19 @@ async function processOutbox(): Promise<{ sent: number; pending: number; lastErr
       return { sent: 0, pending: rows.length, lastError: "email not configured" };
     }
     const to = recipients.join(", ");
-    const transporter = nodemailer.createTransport({ service: "gmail", auth: { user, pass } });
+    // Gmail App Passwords are shown as "xxxx xxxx xxxx xxxx" — accept them
+    // pasted with the spaces left in.
+    const auth = { user, pass: pass.replace(/\s+/g, "") };
+    // SMTP_HOST switches to a custom mail server (non-Google domains);
+    // without it the dedicated Gmail account is assumed.
+    const transporter = dotEnv.SMTP_HOST
+      ? nodemailer.createTransport({
+          host: dotEnv.SMTP_HOST,
+          port: Number(dotEnv.SMTP_PORT) || 465,
+          secure: (Number(dotEnv.SMTP_PORT) || 465) === 465,
+          auth,
+        })
+      : nodemailer.createTransport({ service: "gmail", auth });
 
     // One DB snapshot per batch — attached to each report as the offsite backup.
     const snapshot = path.join(os.tmpdir(), `yft-pos-snapshot-${Date.now()}.sqlite`);
