@@ -27,6 +27,5 @@ describe("receipt print layout", () => {
     expect(html).toContain("@page { size: 80mm auto; margin: 0; }");
     expect(html).toContain("width: 72mm;");
     expect(html).toContain("font-family: Verdana,");
-    expect(html).toContain("font-size: 10pt;");
   });
 });

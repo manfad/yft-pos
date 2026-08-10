@@ -67,32 +67,32 @@ export function renderDayReportHtml(opts: {
     font-family: Verdana, Tahoma, "DejaVu Sans", sans-serif;
     font-variant-numeric: tabular-nums;
     color: #000;
-    line-height: 1.3;
+    line-height: 1.25;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   .report { width: 100%; padding: 3mm 2mm 6mm; overflow: hidden; }
-  .store { text-align: center; font-size: 13pt; font-weight: 700; text-transform: uppercase; }
-  .meta { text-align: center; font-size: 8.5pt; margin-top: 1mm; }
+  .store { text-align: center; font-size: 12pt; font-weight: 800; text-transform: uppercase; }
+  .meta { text-align: center; font-size: 8pt; margin-top: 1mm; }
   .hr { border-top: 1px dashed #000; margin: 2.2mm 0; }
-  .h { font-size: 8.5pt; font-weight: 700; letter-spacing: 0.3px; margin-bottom: 1.4mm; }
+  .h { font-size: 8pt; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 1.4mm; }
   .row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 1.5mm;
-    font-size: 10pt;
+    font-size: 8.5pt;
     margin-bottom: 1.4mm;
     align-items: baseline;
   }
-  .row .name { font-weight: 700; overflow-wrap: anywhere; }
-  .row .qty { white-space: nowrap; font-size: 8pt; color: #000; }
-  .row .amt { white-space: nowrap; font-weight: 700; text-align: right; min-width: 16mm; }
+  .row .name { font-weight: 800; overflow-wrap: anywhere; }
+  .row .qty { white-space: nowrap; font-size: 7.5pt; color: #333; }
+  .row .amt { white-space: nowrap; font-weight: 800; text-align: right; min-width: 16mm; }
   .row.void .name, .row.void .amt { font-weight: 400; text-decoration: line-through; }
   .total {
     display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 3mm;
-    font-size: 14pt; font-weight: 700; margin-top: 1mm;
+    font-size: 13pt; font-weight: 900; margin-top: 1mm;
   }
-  .count { text-align: center; font-size: 8.5pt; margin-top: 2.5mm; }
+  .count { text-align: center; font-size: 7.5pt; margin-top: 2.5mm; }
 </style>
 </head>
 <body>

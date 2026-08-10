@@ -57,21 +57,21 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
     font-family: Verdana, Tahoma, "DejaVu Sans", sans-serif;
     font-variant-numeric: tabular-nums;
     color: #000;
-    line-height: 1.3;
+    line-height: 1.22;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   .receipt { width: 100%; padding: 3mm 2mm 5mm; overflow: hidden; }
   .store {
     text-align: center;
-    font-size: 13pt;
-    font-weight: 700;
+    font-size: 12pt;
+    font-weight: 800;
     letter-spacing: 0.4px;
     text-transform: uppercase;
   }
   .meta {
     text-align: center;
-    font-size: 8.5pt;
+    font-size: 7.5pt;
     margin-top: 1mm;
     line-height: 1.35;
   }
@@ -81,16 +81,16 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
   }
   .item {
     margin-bottom: 2mm;
-    font-size: 10pt;
+    font-size: 8.5pt;
     break-inside: avoid;
   }
   .table-head {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 14mm 19mm;
     gap: 1.5mm;
-    font-size: 8pt;
-    font-weight: 700;
-    letter-spacing: 0.3px;
+    font-size: 6.8pt;
+    font-weight: 400;
+    letter-spacing: 0.5px;
     margin-bottom: 1.6mm;
   }
   .table-head .h-qty { text-align: right; }
@@ -108,17 +108,18 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
     gap: 0.6mm;
     overflow-wrap: anywhere;
   }
-  .item-name { font-weight: 700; }
+  .item-name { font-weight: 800; }
   .item-rate {
-    color: #000;
-    font-size: 8pt;
+    color: #333;
+    font-size: 6.7pt;
+    font-weight: 500;
   }
   .item-qty {
     text-align: right;
     white-space: nowrap;
   }
   .item-amount {
-    font-weight: 700;
+    font-weight: 800;
     white-space: nowrap;
     text-align: right;
   }
@@ -126,8 +127,8 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 3mm;
-    font-size: 14pt;
-    font-weight: 700;
+    font-size: 13pt;
+    font-weight: 900;
     line-height: 1.15;
     margin-top: 0.5mm;
   }
@@ -135,12 +136,12 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
     display: flex;
     justify-content: space-between;
     gap: 3mm;
-    font-size: 8.5pt;
+    font-size: 7.5pt;
     margin-top: 2mm;
   }
   .foot {
     text-align: center;
-    font-size: 8.5pt;
+    font-size: 7.2pt;
     margin-top: 3mm;
   }
 </style>
