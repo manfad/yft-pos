@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { fmtMoney, fmtQtyUnit, type Order, type Unit } from "@yf/core";
 import dayjs from "dayjs";
 import TopBar from "../components/TopBar.vue";
 import CreditsPanel from "../components/CreditsPanel.vue";
+import SettingsDialog from "../components/SettingsDialog.vue";
 import { getRepo } from "../db";
 import { currentCompany } from "../place";
 import { from, setToday } from "../salesDate";
-import { buildDailyExcelB64, downloadDailyExcel } from "../report/daily";
 
 // Per-item sales for the date chosen in the top nav (shared `from`): the selected
 // day, and that month up to and including the selected day (month-to-date).
@@ -15,8 +15,7 @@ import { buildDailyExcelB64, downloadDailyExcel } from "../report/daily";
 // the printed/emailed daily report and this page always agree.
 const sel = computed(() => dayjs(from.value));
 const mtdOrders = ref<Order[]>([]);
-const exporting = shallowRef(false);
-const exportNote = shallowRef("");
+const settingsOpen = ref(false);
 
 async function loadReport(): Promise<void> {
   const repo = await getRepo();
@@ -77,24 +76,6 @@ const panels = computed(() => [
     rows: aggregate(mtdOrders.value),
   },
 ]);
-
-async function exportExcel(): Promise<void> {
-  exporting.value = true;
-  exportNote.value = "";
-  try {
-    const repo = await getRepo();
-    const date = sel.value.format("YYYY-MM-DD");
-    const catalog = await repo.listItems(true);
-    const credits = await repo.listCredits(currentCompany.value.id, { outstandingOnly: true });
-    const filename = `${currentCompany.value.name.replace(/\s+/g, "-")}-sales-${date}.xlsx`;
-    downloadDailyExcel(buildDailyExcelB64(dayOrders.value, catalog, credits), filename);
-    exportNote.value = `Exported ${filename}`;
-  } catch (error) {
-    exportNote.value = error instanceof Error ? error.message : "Excel export failed.";
-  } finally {
-    exporting.value = false;
-  }
-}
 </script>
 
 <template>
@@ -102,15 +83,8 @@ async function exportExcel(): Promise<void> {
 
   <div class="flex-1 min-h-0 overflow-auto p-24px flex flex-col gap-18px">
     <div class="flex items-center justify-between gap-16px flex-none">
-      <div>
-        <div class="text-23px font-800">Sales Report</div>
-        <div v-if="exportNote" class="text-13px font-700 text-muted mt-2px">{{ exportNote }}</div>
-      </div>
-      <button
-        class="press h-48px px-18px rounded-14px border-2 border-olive bg-[#eef3e5] text-15px font-900 text-oliveDark cursor-pointer disabled:opacity-50"
-        :disabled="exporting"
-        @click="exportExcel"
-      >{{ exporting ? "Preparing…" : "Export Excel" }}</button>
+      <div class="text-23px font-800">Sales Report</div>
+      <button class="pill-btn h-46px px-20px text-16px" @click="settingsOpen = true">Settings</button>
     </div>
 
     <!-- Day/Month report card (~60%) on the left, outstanding-credits panel on the right. -->
@@ -177,4 +151,6 @@ async function exportExcel(): Promise<void> {
       <CreditsPanel class="w-full lg:flex-1" :company-id="currentCompany.id" />
     </div>
   </div>
+
+  <SettingsDialog :open="settingsOpen" @close="settingsOpen = false" />
 </template>

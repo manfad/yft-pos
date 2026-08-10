@@ -20,7 +20,6 @@ import SelectInput from "../components/SelectInput.vue";
 import TextInput from "../components/TextInput.vue";
 import NumberInput from "../components/NumberInput.vue";
 import ImagePickerDialog from "../components/ImagePickerDialog.vue";
-import SettingsDialog from "../components/SettingsDialog.vue";
 import { tintFromName } from "../tint";
 
 const catalog = useCatalog();
@@ -44,7 +43,6 @@ interface EditDraft {
 }
 const editing = ref<EditDraft | null>(null);
 const imagePickerOpen = ref(false);
-const settingsOpen = ref(false);
 
 function onPickImage(key: string): void {
   if (editing.value) editing.value.image = key;
@@ -158,10 +156,7 @@ async function saveEdit(): Promise<void> {
   <div class="flex-1 min-h-0 overflow-hidden p-24px flex flex-col gap-18px">
     <div class="flex items-center justify-between flex-none">
       <div class="text-23px font-800">Items &amp; Pricing</div>
-      <div class="flex items-center gap-12px">
-        <button class="pill-btn h-46px px-20px text-16px" @click="settingsOpen = true">Settings</button>
-        <button class="btn-pay h-46px px-24px text-16px" @click="openAdd">+ Add item</button>
-      </div>
+      <button class="btn-pay h-46px px-24px text-16px" @click="openAdd">+ Add item</button>
     </div>
 
     <div class="flex gap-22px flex-1 min-h-0">
@@ -367,7 +362,5 @@ async function saveEdit(): Promise<void> {
     @select="onPickImage"
     @close="imagePickerOpen = false"
   />
-
-  <SettingsDialog :open="settingsOpen" @close="settingsOpen = false" />
 
 </template>
