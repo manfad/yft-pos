@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hq-daily-demo.xlsx</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f0f0f0;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+.file-title {
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    background: #217346;
+    color: #fff;
+}
+.sheet-tabs {
+    display: flex;
+    background: #e0e0e0;
+    border-top: 1px solid #ccc;
+    overflow-x: auto;
+    padding: 0 8px;
+    flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+}
+.sheet-tab {
+    --tab-color: #e8e8e8;
+    padding: 8px 16px;
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid #bbb;
+    border-top: none;
+    background: var(--tab-color);
+    color: #fff;
+    margin-bottom: 0;
+    border-radius: 0 0 3px 3px;
+    white-space: nowrap;
+    user-select: none;
+    position: relative;
+    transition: background 0.15s, color 0.15s;
+}
+.sheet-tab[style*="--tab-color:#e8e8e8"], .sheet-tab:not([style*="--tab-color"]) {
+    color: #333;
+}
+.sheet-tab:hover { opacity: 0.85; }
+.sheet-tab.active {
+    background: linear-gradient(to bottom, #fff 60%, color-mix(in srgb, var(--tab-color) 30%, #fff)) !important;
+    color: #333 !important;
+    border-color: #aaa;
+    border-bottom: 3px solid var(--tab-color);
+    font-weight: 600;
+}
+.sheet-slider { flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.sheet-content { background: #fff; display: none; flex: 1; min-height: 0; }
+.sheet-content.active { display: flex; flex-direction: column; }
+.table-wrapper {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+    background: #fff;
+}
+table {
+    border-collapse: collapse;
+    font-size: 12px;
+    font-family: 'Calibri', 'Segoe UI', sans-serif;
+    table-layout: fixed;
+}
+.row-header-col { width: 30pt; }
+th {
+    background: #f8f8f8;
+    border: 1px solid #e0e0e0;
+    font-weight: normal;
+    color: #666;
+    font-size: 10px;
+    text-align: center;
+    padding: 2px 4px;
+}
+.corner-cell { background: #f0f0f0; z-index: 4; }
+.col-header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #f8f8f8;
+    min-width: 50px;
+    cursor: s-resize;
+}
+.row-header {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #f8f8f8;
+    min-width: 40px;
+    cursor: e-resize;
+    /* Drop right border so the data cell's own (often darker) left border shows through.
+       Otherwise, with border-collapse, the row-header's light grey right border can win
+       the collapse contest and erase the merged-cell left border (rowspan cells especially). */
+    border-right: none;
+}
+td {
+    /* Default gridlines are painted with inset box-shadow instead of
+       border, so they do NOT participate in border-collapse tie-breaking.
+       Explicit OOXML borders (rendered as inline border styles on cells
+       with an OOXML style) always win at cell boundaries; missing cells
+       / style-0 cells no longer erase neighbours' black borders via the
+       CSS position-based tie-break. Right+bottom gridlines are owned by
+       each cell; first-row top and first-col left gridlines are added
+       via the :first-child rules below. Scoped to table:not(.no-grid) so
+       sheets with showGridLines=false suppress the default gridlines while
+       still honouring explicit OOXML cell borders (inline styles). */
+    padding: 1px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+    max-width: 500px;
+    word-break: break-all; /* CJK text wrapping support */
+}
+table:not(.no-grid) td { box-shadow: inset -1px -1px 0 #e0e0e0; }
+/* Text spill: a left/general text cell with empty right-neighbours paints
+   its overflow across them (Excel fidelity). The td stays 1 column wide so
+   borders/gridlines/merges are unaffected; overflow:visible lets the inner
+   span bleed into the (empty) neighbour cells. The span clips at max-width =
+   own width + summed empty-neighbour widths, stopping before the first
+   occupied cell — matching real Excel. */
+td.spill { overflow: visible; }
+td.spill .spill-text {
+    display: inline-block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+    vertical-align: bottom;
+}
+/* Shrink-to-fit: the font is compressed (inline font-size) so the whole
+   string fits the column. Keep it inline-block + clip (never ellipsis) so
+   the full text shows; the td's ellipsis rule must not re-truncate it. */
+.shrink-fit {
+    display: inline-block;
+    white-space: nowrap;
+    text-overflow: clip;
+    overflow: visible;
+}
+table:not(.no-grid) tbody tr:first-child td { box-shadow: inset -1px -1px 0 #e0e0e0, inset 0 1px 0 #e0e0e0; }
+table:not(.no-grid) tr td:first-of-type { box-shadow: inset -1px -1px 0 #e0e0e0, inset 1px 0 0 #e0e0e0; }
+table:not(.no-grid) tbody tr:first-child td:first-of-type { box-shadow: inset -1px -1px 0 #e0e0e0, inset 1px 1px 0 #e0e0e0; }
+.empty-sheet {
+    padding: 40px;
+    text-align: center;
+    color: #999;
+    font-size: 14px;
+}
+/* Chart containers */
+.chart-container {
+    /* No margin: charts are absolutely positioned inside their anchor box,
+       so any margin offsets the visible card off its cell anchor (it landed
+       a row low) and overflows the box bottom. */
+    margin: 0;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.chart-container svg { display: block; }
+/* Truncation warning */
+.truncation-warning {
+    padding: 8px 16px;
+    background: #FFF3CD;
+    color: #856404;
+    border: 1px solid #FFEEBA;
+    font-size: 12px;
+    text-align: center;
+    margin: 4px 0;
+}
+/* Screen reader only */
+.sr-only { position:absolute; clip:rect(0 0 0 0); width:1px; height:1px; overflow:hidden; }
+/* Print styles */
+@media print {
+    .file-title, .sheet-tabs { display: none !important; }
+    .table-wrapper { max-height: none !important; overflow: visible !important; flex: none !important; }
+    body { background: #fff !important; min-height: auto !important; }
+    .sheet-content { display: block !important; flex: none !important; }
+    td { max-width: none !important; white-space: normal !important; overflow: visible !important; }
+}
+</style>
+</head>
+<body>
+<div class="file-title">hq-daily-demo.xlsx</div>
+<div class="sheet-slider">
+<div class="sheet-content active" data-sheet="0">
+<div class="table-wrapper" style="position:relative">
+<table style="width:940.15pt">
+<caption class="sr-only">HQ Daily</caption>
+<colgroup><col class="row-header-col"><col style="width:130.4pt"><col style="width:72.64pt"><col style="width:62.13pt"><col style="width:67.38pt"><col style="width:77.89pt"><col style="width:77.89pt"><col style="width:67.38pt"><col style="width:93.64pt"><col style="width:109.39pt"><col style="width:151.4pt"></colgroup>
+<thead><tr><th class="corner-cell"></th><th class="col-header" data-path="/HQ Daily/col[A]">A</th><th class="col-header" data-path="/HQ Daily/col[B]">B</th><th class="col-header" data-path="/HQ Daily/col[C]">C</th><th class="col-header" data-path="/HQ Daily/col[D]">D</th><th class="col-header" data-path="/HQ Daily/col[E]">E</th><th class="col-header" data-path="/HQ Daily/col[F]">F</th><th class="col-header" data-path="/HQ Daily/col[G]">G</th><th class="col-header" data-path="/HQ Daily/col[H]">H</th><th class="col-header" data-path="/HQ Daily/col[I]">I</th><th class="col-header" data-path="/HQ Daily/col[J]">J</th></tr></thead>
+<tbody>
+<tr data-row="0-1" style="height:15pt"><th class="row-header" data-path="/HQ Daily/row[1]">1</th><td data-path="/HQ Daily/A1" style="font-size:12pt;font-family:'Calibri';color:#000000">Name<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/HQ Daily/B1" style="font-size:12pt;font-family:'Calibri';color:#000000">Date<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/HQ Daily/C1" style="font-size:12pt;font-family:'Calibri';color:#000000">Inv No<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/HQ Daily/D1" style="font-size:12pt;font-family:'Calibri';color:#000000">Pay Type<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/HQ Daily/E1" style="font-size:12pt;font-family:'Calibri';color:#000000">Amount<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/HQ Daily/F1" style="font-size:12pt;font-family:'Calibri';color:#000000">Credit<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/HQ Daily/G1" style="font-size:12pt;font-family:'Calibri';color:#000000">Fish Qty<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/HQ Daily/H1" style="font-size:12pt;font-family:'Calibri';color:#000000">Fish Qty (Ekor)<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/HQ Daily/I1" style="font-size:12pt;font-family:'Calibri';color:#000000">Chicken Qty (Ekor)<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/HQ Daily/J1" style="font-size:12pt;font-family:'Calibri';color:#000000">Remarks<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td></tr>
+<tr data-row="0-2" style="height:15pt"><th class="row-header" data-path="/HQ Daily/row[2]">2</th><td data-path="/HQ Daily/A2" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/HQ Daily/B2" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/HQ Daily/C2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1001</td><td data-path="/HQ Daily/D2" style="font-size:12pt;font-family:'Calibri';color:#000000">Cash</td><td data-path="/HQ Daily/E2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">339.15</td><td data-path="/HQ Daily/F2" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/HQ Daily/G2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">12.75</td><td data-path="/HQ Daily/H2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">18</td><td data-path="/HQ Daily/I2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">0</td><td data-path="/HQ Daily/J2" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="0-3" style="height:15pt"><th class="row-header" data-path="/HQ Daily/row[3]">3</th><td data-path="/HQ Daily/A3" style="font-size:12pt;font-family:'Calibri';color:#000000">Pak Abu</td><td data-path="/HQ Daily/B3" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/HQ Daily/C3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1002</td><td data-path="/HQ Daily/D3" style="font-size:12pt;font-family:'Calibri';color:#000000">Credit</td><td data-path="/HQ Daily/E3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">165.00</td><td data-path="/HQ Daily/F3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">165.00</td><td data-path="/HQ Daily/G3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">4.2</td><td data-path="/HQ Daily/H3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">6</td><td data-path="/HQ Daily/I3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">5</td><td data-path="/HQ Daily/J3" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="0-4" style="height:15pt"><th class="row-header" data-path="/HQ Daily/row[4]">4</th><td data-path="/HQ Daily/A4" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/HQ Daily/B4" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/HQ Daily/C4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1003</td><td data-path="/HQ Daily/D4" style="font-size:12pt;font-family:'Calibri';color:#000000">Bank</td><td data-path="/HQ Daily/E4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">88.50</td><td data-path="/HQ Daily/F4" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/HQ Daily/G4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">0</td><td data-path="/HQ Daily/H4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">0</td><td data-path="/HQ Daily/I4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">0</td><td data-path="/HQ Daily/J4" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="0-5" style="height:15pt"><th class="row-header" data-path="/HQ Daily/row[5]">5</th><td data-path="/HQ Daily/A5" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/HQ Daily/B5" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/HQ Daily/C5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1004</td><td data-path="/HQ Daily/D5" style="font-size:12pt;font-family:'Calibri';color:#000000">QR</td><td data-path="/HQ Daily/E5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">81.00</td><td data-path="/HQ Daily/F5" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/HQ Daily/G5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">0</td><td data-path="/HQ Daily/H5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">0</td><td data-path="/HQ Daily/I5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">0</td><td data-path="/HQ Daily/J5" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="0-6" style="height:15pt"><th class="row-header" data-path="/HQ Daily/row[6]">6</th><td data-path="/HQ Daily/A6" class="spill" style="font-size:12pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:332.55pt">TOTAL</span></td><td data-path="/HQ Daily/B6" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/HQ Daily/C6" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/HQ Daily/D6" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/HQ Daily/E6" data-formula="=SUM(E2:E5)" style="font-size:12pt;font-family:'Calibri';color:#000000">673.65</td><td data-path="/HQ Daily/F6" data-formula="=SUM(F2:F5)" style="font-size:12pt;font-family:'Calibri';color:#000000">165.00</td><td data-path="/HQ Daily/G6" data-formula="=SUM(G2:G5)" style="font-size:12pt;font-family:'Calibri';color:#000000">16.95</td><td data-path="/HQ Daily/H6" data-formula="=SUM(H2:H5)" style="font-size:12pt;font-family:'Calibri';color:#000000">24</td><td data-path="/HQ Daily/I6" data-formula="=SUM(I2:I5)" style="font-size:12pt;font-family:'Calibri';color:#000000">5</td><td data-path="/HQ Daily/J6" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="sheet-content" data-sheet="1">
+<div class="table-wrapper" style="position:relative">
+<table style="width:1116.05pt">
+<caption class="sr-only">Invoice Items</caption>
+<colgroup><col class="row-header-col"><col style="width:130.4pt"><col style="width:72.64pt"><col style="width:51.63pt"><col style="width:62.13pt"><col style="width:67.38pt"><col style="width:151.4pt"><col style="width:56.88pt"><col style="width:62.13pt"><col style="width:51.63pt"><col style="width:72.64pt"><col style="width:77.89pt"><col style="width:77.89pt"><col style="width:151.4pt"></colgroup>
+<thead><tr><th class="corner-cell"></th><th class="col-header" data-path="/Invoice Items/col[A]">A</th><th class="col-header" data-path="/Invoice Items/col[B]">B</th><th class="col-header" data-path="/Invoice Items/col[C]">C</th><th class="col-header" data-path="/Invoice Items/col[D]">D</th><th class="col-header" data-path="/Invoice Items/col[E]">E</th><th class="col-header" data-path="/Invoice Items/col[F]">F</th><th class="col-header" data-path="/Invoice Items/col[G]">G</th><th class="col-header" data-path="/Invoice Items/col[H]">H</th><th class="col-header" data-path="/Invoice Items/col[I]">I</th><th class="col-header" data-path="/Invoice Items/col[J]">J</th><th class="col-header" data-path="/Invoice Items/col[K]">K</th><th class="col-header" data-path="/Invoice Items/col[L]">L</th><th class="col-header" data-path="/Invoice Items/col[M]">M</th></tr></thead>
+<tbody>
+<tr data-row="1-1" style="height:15pt"><th class="row-header" data-path="/Invoice Items/row[1]">1</th><td data-path="/Invoice Items/A1" style="font-size:12pt;font-family:'Calibri';color:#000000">Name<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Invoice Items/B1" style="font-size:12pt;font-family:'Calibri';color:#000000">Date<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Invoice Items/C1" style="font-size:12pt;font-family:'Calibri';color:#000000">Time<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Invoice Items/D1" style="font-size:12pt;font-family:'Calibri';color:#000000">Inv No<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Invoice Items/E1" style="font-size:12pt;font-family:'Calibri';color:#000000">Pay Type<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Invoice Items/F1" style="font-size:12pt;font-family:'Calibri';color:#000000">Item<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Invoice Items/G1" style="font-size:12pt;font-family:'Calibri';color:#000000">Unit<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Invoice Items/H1" style="font-size:12pt;font-family:'Calibri';color:#000000">Qty<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Invoice Items/I1" style="font-size:12pt;font-family:'Calibri';color:#000000">Ekor<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Invoice Items/J1" style="font-size:12pt;font-family:'Calibri';color:#000000">Unit Price<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Invoice Items/K1" style="font-size:12pt;font-family:'Calibri';color:#000000">Line Amount<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Invoice Items/L1" style="font-size:12pt;font-family:'Calibri';color:#000000">Credit<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Invoice Items/M1" style="font-size:12pt;font-family:'Calibri';color:#000000">Remarks<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td></tr>
+<tr data-row="1-2" style="height:15pt"><th class="row-header" data-path="/Invoice Items/row[2]">2</th><td data-path="/Invoice Items/A2" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/B2" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/Invoice Items/C2" style="font-size:12pt;font-family:'Calibri';color:#000000">08:15</td><td data-path="/Invoice Items/D2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1001</td><td data-path="/Invoice Items/E2" style="font-size:12pt;font-family:'Calibri';color:#000000">Cash</td><td data-path="/Invoice Items/F2" style="font-size:12pt;font-family:'Calibri';color:#000000">Ikan Tilapia</td><td data-path="/Invoice Items/G2" style="font-size:12pt;font-family:'Calibri';color:#000000">kg</td><td data-path="/Invoice Items/H2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">12.75</td><td data-path="/Invoice Items/I2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">18</td><td data-path="/Invoice Items/J2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">25.00</td><td data-path="/Invoice Items/K2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">318.75</td><td data-path="/Invoice Items/L2" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/M2" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="1-3" style="height:15pt"><th class="row-header" data-path="/Invoice Items/row[3]">3</th><td data-path="/Invoice Items/A3" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/B3" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/Invoice Items/C3" style="font-size:12pt;font-family:'Calibri';color:#000000">08:15</td><td data-path="/Invoice Items/D3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1001</td><td data-path="/Invoice Items/E3" style="font-size:12pt;font-family:'Calibri';color:#000000">Cash</td><td data-path="/Invoice Items/F3" style="font-size:12pt;font-family:'Calibri';color:#000000">Fresh Milk 500 ml</td><td data-path="/Invoice Items/G3" style="font-size:12pt;font-family:'Calibri';color:#000000">bottle</td><td data-path="/Invoice Items/H3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">3</td><td data-path="/Invoice Items/I3" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/J3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">6.80</td><td data-path="/Invoice Items/K3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">20.40</td><td data-path="/Invoice Items/L3" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/M3" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="1-4" style="height:15pt"><th class="row-header" data-path="/Invoice Items/row[4]">4</th><td data-path="/Invoice Items/A4" style="font-size:12pt;font-family:'Calibri';color:#000000">Pak Abu</td><td data-path="/Invoice Items/B4" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/Invoice Items/C4" style="font-size:12pt;font-family:'Calibri';color:#000000">09:40</td><td data-path="/Invoice Items/D4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1002</td><td data-path="/Invoice Items/E4" style="font-size:12pt;font-family:'Calibri';color:#000000">Credit</td><td data-path="/Invoice Items/F4" style="font-size:12pt;font-family:'Calibri';color:#000000">Ikan Tilapia</td><td data-path="/Invoice Items/G4" style="font-size:12pt;font-family:'Calibri';color:#000000">kg</td><td data-path="/Invoice Items/H4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">4.2</td><td data-path="/Invoice Items/I4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">6</td><td data-path="/Invoice Items/J4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">25.00</td><td data-path="/Invoice Items/K4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">105.00</td><td data-path="/Invoice Items/L4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">105.00</td><td data-path="/Invoice Items/M4" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="1-5" style="height:15pt"><th class="row-header" data-path="/Invoice Items/row[5]">5</th><td data-path="/Invoice Items/A5" style="font-size:12pt;font-family:'Calibri';color:#000000">Pak Abu</td><td data-path="/Invoice Items/B5" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/Invoice Items/C5" style="font-size:12pt;font-family:'Calibri';color:#000000">09:40</td><td data-path="/Invoice Items/D5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1002</td><td data-path="/Invoice Items/E5" style="font-size:12pt;font-family:'Calibri';color:#000000">Credit</td><td data-path="/Invoice Items/F5" style="font-size:12pt;font-family:'Calibri';color:#000000">Ayam</td><td data-path="/Invoice Items/G5" style="font-size:12pt;font-family:'Calibri';color:#000000">each</td><td data-path="/Invoice Items/H5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">5</td><td data-path="/Invoice Items/I5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">5</td><td data-path="/Invoice Items/J5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">12.00</td><td data-path="/Invoice Items/K5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">60.00</td><td data-path="/Invoice Items/L5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">60.00</td><td data-path="/Invoice Items/M5" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="1-6" style="height:15pt"><th class="row-header" data-path="/Invoice Items/row[6]">6</th><td data-path="/Invoice Items/A6" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/B6" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/Invoice Items/C6" style="font-size:12pt;font-family:'Calibri';color:#000000">11:05</td><td data-path="/Invoice Items/D6" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1003</td><td data-path="/Invoice Items/E6" style="font-size:12pt;font-family:'Calibri';color:#000000">Bank</td><td data-path="/Invoice Items/F6" style="font-size:12pt;font-family:'Calibri';color:#000000">Sayur Campur</td><td data-path="/Invoice Items/G6" style="font-size:12pt;font-family:'Calibri';color:#000000">kg</td><td data-path="/Invoice Items/H6" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">2.75</td><td data-path="/Invoice Items/I6" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/J6" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">6.00</td><td data-path="/Invoice Items/K6" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">16.50</td><td data-path="/Invoice Items/L6" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/M6" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="1-7" style="height:15pt"><th class="row-header" data-path="/Invoice Items/row[7]">7</th><td data-path="/Invoice Items/A7" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/B7" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/Invoice Items/C7" style="font-size:12pt;font-family:'Calibri';color:#000000">11:05</td><td data-path="/Invoice Items/D7" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1003</td><td data-path="/Invoice Items/E7" style="font-size:12pt;font-family:'Calibri';color:#000000">Bank</td><td data-path="/Invoice Items/F7" style="font-size:12pt;font-family:'Calibri';color:#000000">UHT 200 ml</td><td data-path="/Invoice Items/G7" style="font-size:12pt;font-family:'Calibri';color:#000000">box</td><td data-path="/Invoice Items/H7" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">2</td><td data-path="/Invoice Items/I7" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/J7" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">36.00</td><td data-path="/Invoice Items/K7" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">72.00</td><td data-path="/Invoice Items/L7" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/M7" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="1-8" style="height:15pt"><th class="row-header" data-path="/Invoice Items/row[8]">8</th><td data-path="/Invoice Items/A8" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/B8" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/Invoice Items/C8" style="font-size:12pt;font-family:'Calibri';color:#000000">13:20</td><td data-path="/Invoice Items/D8" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1004</td><td data-path="/Invoice Items/E8" style="font-size:12pt;font-family:'Calibri';color:#000000">QR</td><td data-path="/Invoice Items/F8" style="font-size:12pt;font-family:'Calibri';color:#000000">Durian</td><td data-path="/Invoice Items/G8" style="font-size:12pt;font-family:'Calibri';color:#000000">kg</td><td data-path="/Invoice Items/H8" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">3.5</td><td data-path="/Invoice Items/I8" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/J8" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">18.00</td><td data-path="/Invoice Items/K8" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">63.00</td><td data-path="/Invoice Items/L8" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/M8" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="1-9" style="height:15pt"><th class="row-header" data-path="/Invoice Items/row[9]">9</th><td data-path="/Invoice Items/A9" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/B9" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/Invoice Items/C9" style="font-size:12pt;font-family:'Calibri';color:#000000">13:20</td><td data-path="/Invoice Items/D9" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1004</td><td data-path="/Invoice Items/E9" style="font-size:12pt;font-family:'Calibri';color:#000000">QR</td><td data-path="/Invoice Items/F9" style="font-size:12pt;font-family:'Calibri';color:#000000">Avocado</td><td data-path="/Invoice Items/G9" style="font-size:12pt;font-family:'Calibri';color:#000000">pack</td><td data-path="/Invoice Items/H9" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">2</td><td data-path="/Invoice Items/I9" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/J9" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">9.00</td><td data-path="/Invoice Items/K9" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">18.00</td><td data-path="/Invoice Items/L9" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/M9" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="1-10" style="height:15pt"><th class="row-header" data-path="/Invoice Items/row[10]">10</th><td data-path="/Invoice Items/A10" class="spill" style="font-size:12pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:592.47pt">TOTAL</span></td><td data-path="/Invoice Items/B10" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/C10" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/D10" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/E10" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/F10" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/G10" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/H10" data-formula="=SUM(H2:H9)" style="font-size:12pt;font-family:'Calibri';color:#000000">35.2</td><td data-path="/Invoice Items/I10" data-formula="=SUM(I2:I9)" style="font-size:12pt;font-family:'Calibri';color:#000000">29</td><td data-path="/Invoice Items/J10" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Invoice Items/K10" data-formula="=SUM(K2:K9)" style="font-size:12pt;font-family:'Calibri';color:#000000">673.65</td><td data-path="/Invoice Items/L10" data-formula="=SUM(L2:L9)" style="font-size:12pt;font-family:'Calibri';color:#000000">165.00</td><td data-path="/Invoice Items/M10" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="sheet-content" data-sheet="2">
+<div class="table-wrapper" style="position:relative">
+<table style="width:590.08pt">
+<caption class="sr-only">Sales Export</caption>
+<colgroup><col class="row-header-col"><col style="width:72.64pt"><col style="width:51.63pt"><col style="width:67.38pt"><col style="width:77.89pt"><col style="width:62.13pt"><col style="width:72.64pt"><col style="width:88.39pt"><col style="width:67.38pt"></colgroup>
+<thead><tr><th class="corner-cell"></th><th class="col-header" data-path="/Sales Export/col[A]">A</th><th class="col-header" data-path="/Sales Export/col[B]">B</th><th class="col-header" data-path="/Sales Export/col[C]">C</th><th class="col-header" data-path="/Sales Export/col[D]">D</th><th class="col-header" data-path="/Sales Export/col[E]">E</th><th class="col-header" data-path="/Sales Export/col[F]">F</th><th class="col-header" data-path="/Sales Export/col[G]">G</th><th class="col-header" data-path="/Sales Export/col[H]">H</th></tr></thead>
+<tbody>
+<tr data-row="2-1" style="height:15pt"><th class="row-header" data-path="/Sales Export/row[1]">1</th><td data-path="/Sales Export/A1" style="font-size:12pt;font-family:'Calibri';color:#000000">Date<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Sales Export/B1" style="font-size:12pt;font-family:'Calibri';color:#000000">Time<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Sales Export/C1" style="font-size:12pt;font-family:'Calibri';color:#000000">Receipt No<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Sales Export/D1" style="font-size:12pt;font-family:'Calibri';color:#000000">Amount<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Sales Export/E1" style="font-size:12pt;font-family:'Calibri';color:#000000">Fish Qty<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Sales Export/F1" style="font-size:12pt;font-family:'Calibri';color:#000000">Tail (Fish)<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Sales Export/G1" style="font-size:12pt;font-family:'Calibri';color:#000000">Tail (Chicken)<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td><td data-path="/Sales Export/H1" style="font-size:12pt;font-family:'Calibri';color:#000000">Pay Type<span class="autofilter-btn" style="display:inline-block;float:right;margin-left:3px;padding:0 2px;border:1px solid #b0b0b0;border-radius:2px;background:#f3f3f3;font-size:0.7em;line-height:1.2;color:#444">▼</span></td></tr>
+<tr data-row="2-2" style="height:15pt"><th class="row-header" data-path="/Sales Export/row[2]">2</th><td data-path="/Sales Export/A2" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/Sales Export/B2" style="font-size:12pt;font-family:'Calibri';color:#000000">08:15</td><td data-path="/Sales Export/C2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1001</td><td data-path="/Sales Export/D2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">339.15</td><td data-path="/Sales Export/E2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">12.75</td><td data-path="/Sales Export/F2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">18</td><td data-path="/Sales Export/G2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">0</td><td data-path="/Sales Export/H2" style="font-size:12pt;font-family:'Calibri';color:#000000">Cash</td></tr>
+<tr data-row="2-3" style="height:15pt"><th class="row-header" data-path="/Sales Export/row[3]">3</th><td data-path="/Sales Export/A3" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/Sales Export/B3" style="font-size:12pt;font-family:'Calibri';color:#000000">09:40</td><td data-path="/Sales Export/C3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1002</td><td data-path="/Sales Export/D3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">165.00</td><td data-path="/Sales Export/E3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">4.2</td><td data-path="/Sales Export/F3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">6</td><td data-path="/Sales Export/G3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">5</td><td data-path="/Sales Export/H3" style="font-size:12pt;font-family:'Calibri';color:#000000">Credit</td></tr>
+<tr data-row="2-4" style="height:15pt"><th class="row-header" data-path="/Sales Export/row[4]">4</th><td data-path="/Sales Export/A4" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/Sales Export/B4" style="font-size:12pt;font-family:'Calibri';color:#000000">11:05</td><td data-path="/Sales Export/C4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1003</td><td data-path="/Sales Export/D4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">88.50</td><td data-path="/Sales Export/E4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">0</td><td data-path="/Sales Export/F4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">0</td><td data-path="/Sales Export/G4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">0</td><td data-path="/Sales Export/H4" style="font-size:12pt;font-family:'Calibri';color:#000000">Bank</td></tr>
+<tr data-row="2-5" style="height:15pt"><th class="row-header" data-path="/Sales Export/row[5]">5</th><td data-path="/Sales Export/A5" style="font-size:12pt;font-family:'Calibri';color:#000000">2026-08-10</td><td data-path="/Sales Export/B5" style="font-size:12pt;font-family:'Calibri';color:#000000">13:20</td><td data-path="/Sales Export/C5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1004</td><td data-path="/Sales Export/D5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">81.00</td><td data-path="/Sales Export/E5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">0</td><td data-path="/Sales Export/F5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">0</td><td data-path="/Sales Export/G5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">0</td><td data-path="/Sales Export/H5" style="font-size:12pt;font-family:'Calibri';color:#000000">QR</td></tr>
+<tr data-row="2-6" style="height:15pt"><th class="row-header" data-path="/Sales Export/row[6]">6</th><td data-path="/Sales Export/A6" class="spill" style="font-size:12pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:191.65pt">TOTAL</span></td><td data-path="/Sales Export/B6" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Sales Export/C6" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Sales Export/D6" data-formula="=SUM(D2:D5)" style="font-size:12pt;font-family:'Calibri';color:#000000">673.65</td><td data-path="/Sales Export/E6" data-formula="=SUM(E2:E5)" style="font-size:12pt;font-family:'Calibri';color:#000000">16.95</td><td data-path="/Sales Export/F6" data-formula="=SUM(F2:F5)" style="font-size:12pt;font-family:'Calibri';color:#000000">24</td><td data-path="/Sales Export/G6" data-formula="=SUM(G2:G5)" style="font-size:12pt;font-family:'Calibri';color:#000000">5</td><td data-path="/Sales Export/H6" style="font-size:12pt;font-family:'Calibri';color:#000000"></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="sheet-content" data-sheet="3">
+<div class="table-wrapper" style="position:relative">
+<table style="width:409.81pt">
+<caption class="sr-only">Totals</caption>
+<colgroup><col class="row-header-col"><col style="width:151.4pt"><col style="width:62.13pt"><col style="width:77.89pt"><col style="width:88.39pt"></colgroup>
+<thead><tr><th class="corner-cell"></th><th class="col-header" data-path="/Totals/col[A]">A</th><th class="col-header" data-path="/Totals/col[B]">B</th><th class="col-header" data-path="/Totals/col[C]">C</th><th class="col-header" data-path="/Totals/col[D]">D</th></tr></thead>
+<tbody>
+<tr data-row="3-1" style="height:15pt"><th class="row-header" data-path="/Totals/row[1]">1</th><td data-path="/Totals/A1" style="font-size:12pt;font-family:'Calibri';color:#000000">Item</td><td data-path="/Totals/B1" style="font-size:12pt;font-family:'Calibri';color:#000000">Ekor</td><td data-path="/Totals/C1" style="font-size:12pt;font-family:'Calibri';color:#000000">Qty</td><td data-path="/Totals/D1" style="font-size:12pt;font-family:'Calibri';color:#000000">Amount (RM)</td></tr>
+<tr data-row="3-2" style="height:15pt"><th class="row-header" data-path="/Totals/row[2]">2</th><td data-path="/Totals/A2" style="font-size:12pt;font-family:'Calibri';color:#000000">Ikan Tilapia</td><td data-path="/Totals/B2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">24</td><td data-path="/Totals/C2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">16.95</td><td data-path="/Totals/D2" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">423.75</td></tr>
+<tr data-row="3-3" style="height:15pt"><th class="row-header" data-path="/Totals/row[3]">3</th><td data-path="/Totals/A3" style="font-size:12pt;font-family:'Calibri';color:#000000">Ayam</td><td data-path="/Totals/B3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">5</td><td data-path="/Totals/C3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">5</td><td data-path="/Totals/D3" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">60</td></tr>
+<tr data-row="3-4" style="height:15pt"><th class="row-header" data-path="/Totals/row[4]">4</th><td data-path="/Totals/A4" class="spill" style="font-size:12pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:213.54pt">Durian</span></td><td data-path="/Totals/B4" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Totals/C4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">3.5</td><td data-path="/Totals/D4" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">63</td></tr>
+<tr data-row="3-5" style="height:15pt"><th class="row-header" data-path="/Totals/row[5]">5</th><td data-path="/Totals/A5" class="spill" style="font-size:12pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:213.54pt">Fresh Milk 500 ml</span></td><td data-path="/Totals/B5" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Totals/C5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">3</td><td data-path="/Totals/D5" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">20.4</td></tr>
+<tr data-row="3-6" style="height:15pt"><th class="row-header" data-path="/Totals/row[6]">6</th><td data-path="/Totals/A6" class="spill" style="font-size:12pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:213.54pt">Sayur Campur</span></td><td data-path="/Totals/B6" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Totals/C6" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">2.75</td><td data-path="/Totals/D6" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">16.5</td></tr>
+<tr data-row="3-7" style="height:15pt"><th class="row-header" data-path="/Totals/row[7]">7</th><td data-path="/Totals/A7" class="spill" style="font-size:12pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:213.54pt">UHT 200 ml</span></td><td data-path="/Totals/B7" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Totals/C7" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">2</td><td data-path="/Totals/D7" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">72</td></tr>
+<tr data-row="3-8" style="height:15pt"><th class="row-header" data-path="/Totals/row[8]">8</th><td data-path="/Totals/A8" class="spill" style="font-size:12pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:213.54pt">Avocado</span></td><td data-path="/Totals/B8" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Totals/C8" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">2</td><td data-path="/Totals/D8" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">18</td></tr>
+<tr data-row="3-9" style="height:15pt"><th class="row-header" data-path="/Totals/row[9]">9</th><td data-path="/Totals/A9"></td><td data-path="/Totals/B9"></td><td data-path="/Totals/C9"></td><td data-path="/Totals/D9"></td></tr>
+<tr data-row="3-10" style="height:15pt"><th class="row-header" data-path="/Totals/row[10]">10</th><td data-path="/Totals/A10" class="spill" style="font-size:12pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:213.54pt">Cash sales</span></td><td data-path="/Totals/B10" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Totals/C10" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1</td><td data-path="/Totals/D10" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">339.15</td></tr>
+<tr data-row="3-11" style="height:15pt"><th class="row-header" data-path="/Totals/row[11]">11</th><td data-path="/Totals/A11" class="spill" style="font-size:12pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:213.54pt">Bank sales</span></td><td data-path="/Totals/B11" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Totals/C11" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1</td><td data-path="/Totals/D11" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">88.5</td></tr>
+<tr data-row="3-12" style="height:15pt"><th class="row-header" data-path="/Totals/row[12]">12</th><td data-path="/Totals/A12" class="spill" style="font-size:12pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:213.54pt">QR sales</span></td><td data-path="/Totals/B12" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Totals/C12" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1</td><td data-path="/Totals/D12" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">81</td></tr>
+<tr data-row="3-13" style="height:15pt"><th class="row-header" data-path="/Totals/row[13]">13</th><td data-path="/Totals/A13" class="spill" style="font-size:12pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:213.54pt">Credit sales</span></td><td data-path="/Totals/B13" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Totals/C13" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1</td><td data-path="/Totals/D13" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">165</td></tr>
+<tr data-row="3-14" style="height:15pt"><th class="row-header" data-path="/Totals/row[14]">14</th><td data-path="/Totals/A14"></td><td data-path="/Totals/B14"></td><td data-path="/Totals/C14"></td><td data-path="/Totals/D14"></td></tr>
+<tr data-row="3-15" style="height:15pt"><th class="row-header" data-path="/Totals/row[15]">15</th><td data-path="/Totals/A15" class="spill" style="font-size:12pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:213.54pt">Voided sales</span></td><td data-path="/Totals/B15" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Totals/C15" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">1</td><td data-path="/Totals/D15" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">25</td></tr>
+<tr data-row="3-16" style="height:15pt"><th class="row-header" data-path="/Totals/row[16]">16</th><td data-path="/Totals/A16" class="spill" style="font-size:12pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:213.54pt">TOTAL</span></td><td data-path="/Totals/B16" style="font-size:12pt;font-family:'Calibri';color:#000000"></td><td data-path="/Totals/C16" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">4</td><td data-path="/Totals/D16" style="font-size:12pt;font-family:'Calibri';color:#000000;text-align:right">673.65</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="sheet-tabs" role="tablist">
+  <div class="sheet-tab active" data-sheet="0" role="tab" tabindex="0" onclick="switchSheet(0)" onkeydown="if(event.key==='Enter'||event.key===' ')switchSheet(0)">HQ Daily</div>
+  <div class="sheet-tab" data-sheet="1" role="tab" tabindex="0" onclick="switchSheet(1)" onkeydown="if(event.key==='Enter'||event.key===' ')switchSheet(1)">Invoice Items</div>
+  <div class="sheet-tab" data-sheet="2" role="tab" tabindex="0" onclick="switchSheet(2)" onkeydown="if(event.key==='Enter'||event.key===' ')switchSheet(2)">Sales Export</div>
+  <div class="sheet-tab" data-sheet="3" role="tab" tabindex="0" onclick="switchSheet(3)" onkeydown="if(event.key==='Enter'||event.key===' ')switchSheet(3)">Totals</div>
+</div>
+<script>
+function switchSheet(idx) {
+    document.querySelectorAll('.sheet-tab').forEach(function(t) {
+        t.classList.toggle('active', parseInt(t.getAttribute('data-sheet')) === idx);
+    });
+    document.querySelectorAll('.sheet-content').forEach(function(c) {
+        c.classList.toggle('active', parseInt(c.getAttribute('data-sheet')) === idx);
+    });
+    window.scrollTo(0, 0);
+}
+// Fix frozen row sticky top values using actual rendered heights
+document.querySelectorAll('.table-wrapper table').forEach(function(table) {
+    var thead = table.querySelector('thead');
+    if (!thead) return;
+    var theadH = thead.offsetHeight;
+    var cumTop = theadH;
+    var frozen = table.querySelectorAll('tr[data-frozen]');
+    frozen.forEach(function(tr) {
+        tr.querySelectorAll('th, td').forEach(function(cell) {
+            if (cell.style.position === 'sticky') cell.style.top = cumTop + 'px';
+        });
+        cumTop += tr.offsetHeight;
+    });
+});
+</script>
+</body>
+</html>
