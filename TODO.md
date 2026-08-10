@@ -108,3 +108,44 @@ Changes:
 - `apps/pos/src/views/ReportView.vue` (or a new export button) — add "Export Excel".
 - depends on tasks 1 + 3 for the tail and Credit columns.
 - pick a lib (e.g. SheetJS/`xlsx`) or emit CSV that opens in Excel — decide tomorrow.
+
+---
+
+## 5. Post-MVP: daily admin Excel template + automatic email
+
+After the basic app is finished, add a reusable `.xlsx` template for the daily report
+that is emailed to the admin at Close Day. Use one row per invoice/order with these
+columns, in this order:
+
+```
+Name | Date | Inv No | Pay Type | Amount | Credit | Qty (Ekor) | Remarks
+```
+
+Close Day workflow:
+1. The cashier presses **Close Day** in the top bar and confirms the close.
+2. Finalise the current business day so no more sales are added to that report.
+3. Generate the completed daily Excel workbook automatically.
+4. Queue/send the workbook to HQ automatically through the existing email outbox.
+5. Navigate the cashier to `/report` for the business day that was just closed.
+6. Show whether the report was sent or safely queued for retry when the PC is offline.
+
+The close must be idempotent: pressing Close Day again must not create or email a
+duplicate workbook for the same company and business date.
+
+Rules:
+- `Name` = creditor name only when `Pay Type` is `Credit`; otherwise leave blank.
+- `Date` = the order's business date.
+- `Inv No` = order/receipt id.
+- `Pay Type` = Cash, Bank, QR, or Credit.
+- `Amount` = full invoice total.
+- `Credit` = the invoice amount only when `Pay Type` is `Credit`; otherwise leave blank.
+- `Qty (Ekor)` = total `tail_count` across the order's tail-tracking lines.
+- `Remarks` = blank by default, available for admin/cashier notes later.
+- Add a footer row that totals `Amount`, `Credit`, and `Qty (Ekor)`.
+- Generate one workbook per company and business date, attach it to the existing daily
+  report email/outbox flow, and keep the template formatting stable across exports.
+
+Implementation notes:
+- Keep the workbook template as a versioned app asset; populate it with SheetJS/`xlsx`.
+- Add regression tests for normal payments, Credit name/amount population, Ekor totals,
+  footer formulas/totals, and an empty-sales day.
