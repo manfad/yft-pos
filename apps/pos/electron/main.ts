@@ -236,8 +236,10 @@ ipcMain.handle("mailer:process", () => processOutbox());
 
 function createWindow(): void {
   const win = (mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: 1024,
+    height: 768,
+    minWidth: 960,
+    minHeight: 700,
     backgroundColor: "#f3ece0",
     autoHideMenuBar: true,
     webPreferences: {

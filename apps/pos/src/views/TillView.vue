@@ -134,11 +134,11 @@ async function confirm(method: PaymentMethod): Promise<void> {
 <template>
   <TopBar mode="till" />
 
-  <div class="flex-1 flex gap-20px p-20px min-h-0">
+  <div class="till-layout flex-1 flex gap-20px p-20px min-h-0">
     <!-- left: product grid + adjuster -->
-    <div class="flex-[0_0_600px] flex flex-col gap-16px min-h-0">
+    <div class="catalog-pane flex-[0_0_600px] flex flex-col gap-16px min-h-0">
       <div
-        class="grid grid-cols-4 gap-14px overflow-y-auto content-start pr-4px"
+        class="product-grid grid grid-cols-4 gap-14px overflow-y-auto content-start pr-4px"
         style="grid-auto-rows: 128px; max-height: calc(128px * 4 + 14px * 3)"
       >
         <ProductCard
@@ -150,8 +150,8 @@ async function confirm(method: PaymentMethod): Promise<void> {
       </div>
 
       <!-- active-line adjuster -->
-      <div class="bg-surface border-2 border-border rounded-18px p-16px flex flex-col gap-13px flex-none">
-        <div class="flex items-center gap-10px min-h-26px flex-wrap">
+      <div class="quantity-adjuster bg-surface border-2 border-border rounded-18px p-16px flex flex-col gap-13px flex-none">
+        <div class="price-tiers flex items-center gap-10px min-h-26px flex-wrap">
           <div
             v-if="active"
             class="inline-flex items-center text-15px font-800 rounded-full px-10px py-4px border-2 whitespace-nowrap transition-colors"
@@ -169,49 +169,49 @@ async function confirm(method: PaymentMethod): Promise<void> {
             {{ t.priceText }}
           </span>
         </div>
-        <div class="flex items-center gap-14px">
-          <button class="adj-btn w-64px h-64px text-34px" @click="cart.adjust(-0.5)">−</button>
+        <div class="quantity-stepper flex items-center gap-14px">
+          <button class="stepper-side adj-btn w-64px h-64px text-34px" @click="cart.adjust(-0.5)">−</button>
           <button
-            class="flex-1 text-center font-display text-42px font-600 bg-[#f4ecdc] rounded-14px py-6px border-2 border-transparent cursor-pointer press disabled:cursor-default"
+            class="stepper-value flex-1 text-center font-display text-42px font-600 bg-[#f4ecdc] rounded-14px py-6px border-2 border-transparent cursor-pointer press disabled:cursor-default"
             :disabled="!active"
             title="Tap to type quantity"
             @click="openNumpad()"
           >
             {{ activeQtyStr }}
           </button>
-          <button class="adj-btn w-64px h-64px text-34px" @click="cart.adjust(0.5)">+</button>
+          <button class="stepper-side adj-btn w-64px h-64px text-34px" @click="cart.adjust(0.5)">+</button>
         </div>
-        <div class="text-center text-17px font-800 text-terracotta">{{ activeMathStr }}</div>
-        <div class="grid grid-cols-4 gap-10px">
-          <button class="tile-dark h-58px text-20px" @click="cart.adjust(-10)">− 10</button>
-          <button class="tile-dark h-58px text-20px" @click="cart.adjust(-1)">− 1</button>
-          <button class="tile-warm h-58px text-20px" @click="cart.adjust(1)">+ 1</button>
-          <button class="tile-warm h-58px text-20px" @click="cart.adjust(10)">+ 10</button>
+        <div class="quantity-math text-center text-17px font-800 text-terracotta">{{ activeMathStr }}</div>
+        <div class="quick-grid grid grid-cols-4 gap-10px">
+          <button class="quick-button tile-dark h-58px text-20px" @click="cart.adjust(-10)">− 10</button>
+          <button class="quick-button tile-dark h-58px text-20px" @click="cart.adjust(-1)">− 1</button>
+          <button class="quick-button tile-warm h-58px text-20px" @click="cart.adjust(1)">+ 1</button>
+          <button class="quick-button tile-warm h-58px text-20px" @click="cart.adjust(10)">+ 10</button>
         </div>
       </div>
 
       <!-- tail ("ekor") adjuster — a head count for fish/chicken, independent of kg -->
       <div
         v-if="activeTracksTail"
-        class="bg-surface border-2 border-olive rounded-18px p-16px flex flex-col gap-13px flex-none"
+        class="tail-adjuster bg-surface border-2 border-olive rounded-18px p-16px flex flex-col gap-13px flex-none"
       >
-        <div class="flex items-center gap-14px">
-          <button class="adj-btn w-64px h-64px text-34px" @click="cart.adjustTail(-1)">−</button>
+        <div class="quantity-stepper flex items-center gap-14px">
+          <button class="stepper-side adj-btn w-64px h-64px text-34px" @click="cart.adjustTail(-1)">−</button>
           <button
-            class="flex-1 text-center font-display text-42px font-600 bg-[#eef0e0] rounded-14px py-6px border-2 border-transparent cursor-pointer press disabled:cursor-default"
+            class="stepper-value flex-1 text-center font-display text-42px font-600 bg-[#eef0e0] rounded-14px py-6px border-2 border-transparent cursor-pointer press disabled:cursor-default"
             :disabled="!active"
             title="Tap to type Ekor"
             @click="openNumpad(undefined, 'tail')"
           >
             {{ activeTailStr }}
           </button>
-          <button class="adj-btn w-64px h-64px text-34px" @click="cart.adjustTail(1)">+</button>
+          <button class="stepper-side adj-btn w-64px h-64px text-34px" @click="cart.adjustTail(1)">+</button>
         </div>
-        <div class="grid grid-cols-4 gap-10px">
-          <button class="tile-dark h-58px text-20px" @click="cart.adjustTail(-10)">− 10</button>
-          <button class="tile-dark h-58px text-20px" @click="cart.adjustTail(-1)">− 1</button>
-          <button class="tile-warm h-58px text-20px" @click="cart.adjustTail(1)">+ 1</button>
-          <button class="tile-warm h-58px text-20px" @click="cart.adjustTail(10)">+ 10</button>
+        <div class="quick-grid grid grid-cols-4 gap-10px">
+          <button class="quick-button tile-dark h-58px text-20px" @click="cart.adjustTail(-10)">− 10</button>
+          <button class="quick-button tile-dark h-58px text-20px" @click="cart.adjustTail(-1)">− 1</button>
+          <button class="quick-button tile-warm h-58px text-20px" @click="cart.adjustTail(1)">+ 1</button>
+          <button class="quick-button tile-warm h-58px text-20px" @click="cart.adjustTail(10)">+ 10</button>
         </div>
       </div>
     </div>
@@ -225,9 +225,9 @@ async function confirm(method: PaymentMethod): Promise<void> {
       <!-- column header (aligned to CartLine's grid) -->
       <div
         v-if="cart.lines.length"
-        class="flex-none pt-14px pb-6px grid items-center gap-10px text-12px font-800 text-muted uppercase tracking-wide"
-        :class="hasTail ? 'grid-cols-[minmax(0,1fr)_172px_188px_138px_44px]' : 'grid-cols-[minmax(0,1fr)_220px_150px_44px]'"
-        style="padding-left: 32px; padding-right: 32px"
+        class="cart-header flex-none pt-14px pb-6px grid items-center gap-8px text-12px font-800 text-muted uppercase tracking-wide"
+        :class="hasTail ? 'cart-grid-tail' : 'cart-grid-standard'"
+        style="padding-left: 28px; padding-right: 28px"
       >
         <div>Item</div>
         <div v-if="hasTail" class="text-center">Ekor</div>
@@ -293,3 +293,58 @@ async function confirm(method: PaymentMethod): Promise<void> {
     @close="numpadUid = null"
   />
 </template>
+
+<style scoped>
+@media (max-width: 1100px) {
+  .till-layout {
+    gap: 12px;
+    padding: 12px;
+  }
+  .catalog-pane {
+    flex-basis: 390px;
+    gap: 10px;
+  }
+  .product-grid {
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: none !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: 112px !important;
+    gap: 10px;
+  }
+  .quantity-adjuster,
+  .tail-adjuster {
+    padding: 10px;
+    gap: 8px;
+  }
+  .price-tiers {
+    gap: 6px;
+  }
+  .quantity-stepper {
+    gap: 10px;
+  }
+  .stepper-side {
+    width: 52px;
+    height: 52px;
+    font-size: 28px;
+  }
+  .stepper-value {
+    min-height: 52px;
+    padding-block: 2px;
+    font-size: 34px;
+  }
+  .quantity-math {
+    font-size: 14px;
+  }
+  .quick-grid {
+    gap: 7px;
+  }
+  .quick-button {
+    height: 46px;
+    font-size: 17px;
+  }
+  .cart-header {
+    padding-inline: 20px !important;
+  }
+}
+</style>

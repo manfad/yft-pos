@@ -5,6 +5,14 @@ import type { Receipt } from "@yf/core";
 // (and a normal A4 printer too, for testing before the thermal unit arrives).
 
 export const PAPER_WIDTH_MM = 80; // default; overridable per print via settings
+const NON_PRINTABLE_EDGE_MM = 4;
+
+/**
+ * Thermal rolls are named by paper width, not printable width. Leave 4 mm on
+ * each side so Windows drivers cannot clip the receipt at the print-head edge.
+ */
+export const printableWidthMm = (paperWidthMm: number): number =>
+  Math.max(1, paperWidthMm - NON_PRINTABLE_EDGE_MM * 2);
 
 const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -17,6 +25,7 @@ const amt = (s: string): string => {
 };
 
 export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM): string {
+  const contentWidthMm = printableWidthMm(widthMm);
   const rows = r.lines
     .map(
       (l) => `
@@ -41,9 +50,10 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
 <style>
   @page { size: ${widthMm}mm auto; margin: 0; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
+  html, body { margin: 0; padding: 0; overflow: hidden; }
   body {
-    width: ${widthMm}mm;
+    width: ${contentWidthMm}mm;
+    max-width: ${contentWidthMm}mm;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     font-variant-numeric: tabular-nums;
     color: #000;
@@ -51,7 +61,7 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .receipt { padding: 4mm 3.5mm 5mm; }
+  .receipt { width: 100%; padding: 3mm 2mm 5mm; overflow: hidden; }
   .store {
     text-align: center;
     font-size: 12pt;
@@ -76,8 +86,8 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
   }
   .table-head {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 13mm 22mm;
-    gap: 2.5mm;
+    grid-template-columns: minmax(0, 1fr) 14mm 19mm;
+    gap: 1.5mm;
     font-size: 6.8pt;
     font-weight: 400;
     letter-spacing: 0.5px;
@@ -87,8 +97,8 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
   .table-head .h-amt { text-align: right; }
   .item-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 13mm 22mm;
-    gap: 2.5mm;
+    grid-template-columns: minmax(0, 1fr) 14mm 19mm;
+    gap: 1.5mm;
     align-items: baseline;
   }
   .item-detail {

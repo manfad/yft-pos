@@ -10,13 +10,62 @@ body,
 }
 body {
   margin: 0;
+  overflow: hidden;
   background: #f1e9db;
   color: #2c2620;
   font-family: "Nunito Variable", sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Warm, compact scrollbars that belong to the app instead of looking like
+   browser chrome. Firefox uses the standard properties; Electron/Chrome uses
+   the WebKit pseudo-elements below. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c7b99d transparent;
+}
+*::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  min-height: 44px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: #c7b99d;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #8fa16f;
+}
+*::-webkit-scrollbar-button {
+  display: none;
+}
 button {
   font-family: inherit;
+}
+
+/* Shared checkout columns. Keeping the header and rows on the same named
+   templates prevents drift when the 1024px desktop layout compacts. */
+.cart-grid-standard {
+  grid-template-columns: minmax(120px, 1fr) 170px 112px 40px;
+}
+.cart-grid-tail {
+  grid-template-columns: minmax(90px, 1fr) 126px 150px 104px 40px;
+}
+@media (max-width: 1100px) {
+  .cart-grid-standard {
+    grid-template-columns: minmax(92px, 1fr) 146px 100px 38px;
+    gap: 6px;
+  }
+  .cart-grid-tail {
+    grid-template-columns: minmax(72px, 1fr) 122px 146px 96px 38px;
+    gap: 6px;
+  }
 }
 @keyframes toastIn {
   from {

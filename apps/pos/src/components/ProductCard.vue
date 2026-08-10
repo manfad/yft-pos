@@ -12,7 +12,7 @@ const img = computed(() => productImage(props.item.image));
 <template>
   <button
     :title="item.name"
-    class="relative h-128px bg-surface border-2 border-border rounded-18px cursor-pointer shadow-[0_3px_0_theme(colors.border)] p-10px overflow-hidden transition-all active:translate-y-3px active:shadow-none active:border-terracotta"
+    class="relative h-full min-h-0 bg-surface border-2 border-border rounded-18px cursor-pointer shadow-[0_3px_0_theme(colors.border)] p-10px overflow-hidden transition-all active:translate-y-3px active:shadow-none active:border-terracotta"
     @click="$emit('add')"
   >
     <!-- photo, or name fallback when there's no image -->

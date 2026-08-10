@@ -6,6 +6,7 @@ import {
   PAYMENT_METHODS,
   type Order,
 } from "@yf/core";
+import { printableWidthMm } from "./renderReceiptHtml";
 
 // The paper copy of the daily sales report, printed on the roll at Close Day —
 // same layout family as the receipt (renderReceiptHtml.ts).
@@ -23,6 +24,7 @@ export function renderDayReportHtml(opts: {
   paperWidthMm?: number;
 }): string {
   const width = opts.paperWidthMm ?? 80;
+  const contentWidth = printableWidthMm(width);
   const stats = computeStats(opts.orders, "today");
   const sales = aggregateItemSales(opts.orders);
   const voided = opts.orders.filter((o) => o.voidedAt != null);
@@ -58,9 +60,10 @@ export function renderDayReportHtml(opts: {
 <style>
   @page { size: ${width}mm auto; margin: 0; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
+  html, body { margin: 0; padding: 0; overflow: hidden; }
   body {
-    width: ${width}mm;
+    width: ${contentWidth}mm;
+    max-width: ${contentWidth}mm;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     font-variant-numeric: tabular-nums;
     color: #000;
@@ -68,7 +71,7 @@ export function renderDayReportHtml(opts: {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .report { padding: 4mm 3.5mm 6mm; }
+  .report { width: 100%; padding: 3mm 2mm 6mm; overflow: hidden; }
   .store { text-align: center; font-size: 12pt; font-weight: 800; text-transform: uppercase; }
   .meta { text-align: center; font-size: 8pt; margin-top: 1mm; }
   .hr { border-top: 1px dashed #000; margin: 2.2mm 0; }
@@ -76,7 +79,7 @@ export function renderDayReportHtml(opts: {
   .row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
-    gap: 2.5mm;
+    gap: 1.5mm;
     font-size: 8.5pt;
     margin-bottom: 1.4mm;
     align-items: baseline;

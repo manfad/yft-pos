@@ -116,11 +116,11 @@ function pickDate(v: string) {
       <!-- sales/report: clickable date selector; till/admin: today's date -->
       <div v-if="mode === 'sales' || mode === 'report'" class="relative">
         <button
-          class="press flex items-center gap-9px h-54px px-20px rounded-14px bg-ink text-white text-17px font-800 cursor-pointer"
+          class="press flex items-center w-172px h-54px px-14px rounded-14px bg-date text-white text-17px font-800 cursor-pointer"
           @click="dateOpen = !dateOpen"
         >
-          {{ dateLabel }}
-          <span class="text-14px opacity-80" :class="dateOpen ? 'rotate-180' : ''">▾</span>
+          <span class="flex-1 text-center whitespace-nowrap">{{ dateLabel }}</span>
+          <span class="w-12px flex-none text-center text-14px opacity-80" :class="dateOpen ? 'rotate-180' : ''">▾</span>
         </button>
         <template v-if="dateOpen">
           <div class="fixed inset-0 z-40" @click="dateOpen = false" />
@@ -129,7 +129,7 @@ function pickDate(v: string) {
           >
             <DatePicker :model-value="from" :max="todayStr" @update:model-value="pickDate" />
             <button
-              class="w-full h-42px text-14px mt-4px rounded-12px border-none bg-ink text-white font-800 cursor-pointer press"
+              class="w-full h-42px text-14px mt-4px rounded-12px border-none bg-oliveDark text-white font-800 cursor-pointer press"
               @click="((setToday()), (dateOpen = false))"
             >Today</button>
           </div>
@@ -137,7 +137,7 @@ function pickDate(v: string) {
       </div>
       <div
         v-else
-        class="flex items-center h-54px px-20px rounded-14px bg-ink text-white text-17px font-800"
+        class="flex items-center justify-center w-172px h-54px px-14px rounded-14px bg-date text-white text-17px font-800 whitespace-nowrap"
       >
         {{ todayLabel }}
       </div>

@@ -166,20 +166,20 @@ function onVoided(updated: Order): void {
 
   <div class="flex-1 overflow-auto p-24px flex flex-col gap-22px">
     <!-- tabs -->
-    <div class="flex gap-8px p-7px bg-[#e3d6bb] border-2 border-border rounded-16px self-start">
+    <div class="flex gap-8px p-7px bg-panel border-2 border-border rounded-16px self-start">
       <button
         class="px-26px py-12px rounded-12px border-none cursor-pointer text-17px font-800 transition-colors"
-        :class="tab === 'date' ? 'bg-ink text-white shadow-[0_2px_0_rgba(0,0,0,0.18)]' : 'bg-surface text-muted'"
+        :class="tab === 'date' ? 'bg-oliveDark text-white shadow-[0_2px_0_rgba(0,0,0,0.18)]' : 'bg-surface text-muted'"
         @click="tab = 'date'"
       >Day</button>
       <button
         class="px-26px py-12px rounded-12px border-none cursor-pointer text-17px font-800 transition-colors"
-        :class="tab === 'week' ? 'bg-ink text-white shadow-[0_2px_0_rgba(0,0,0,0.18)]' : 'bg-surface text-muted'"
+        :class="tab === 'week' ? 'bg-oliveDark text-white shadow-[0_2px_0_rgba(0,0,0,0.18)]' : 'bg-surface text-muted'"
         @click="tab = 'week'"
       >Weekly</button>
       <button
         class="px-26px py-12px rounded-12px border-none cursor-pointer text-17px font-800 transition-colors"
-        :class="tab === 'month' ? 'bg-ink text-white shadow-[0_2px_0_rgba(0,0,0,0.18)]' : 'bg-surface text-muted'"
+        :class="tab === 'month' ? 'bg-oliveDark text-white shadow-[0_2px_0_rgba(0,0,0,0.18)]' : 'bg-surface text-muted'"
         @click="tab = 'month'"
       >Monthly</button>
     </div>

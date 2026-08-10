@@ -1,17 +1,24 @@
+import Decimal from "decimal.js";
 import type { Cents, Milli, Unit } from "./types.js";
 
 // DB/domain store integers; the UI speaks decimals. These are the only places
 // the conversion happens, so rounding stays consistent everywhere.
 
-export const toRM = (cents: Cents): number => Math.round(cents) / 100;
-export const toCents = (rm: number): Cents => Math.round(Number(rm) * 100);
+export const toRM = (cents: Cents): number => new Decimal(cents).div(100).toNumber();
+export const toCents = (rm: number): Cents =>
+  new Decimal(String(rm)).mul(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
 
-export const toQty = (milli: Milli): number => milli / 1000;
-export const toMilli = (qty: number): Milli => Math.round(Number(qty) * 1000);
+export const toQty = (milli: Milli): number => new Decimal(milli).div(1000).toNumber();
+export const toMilli = (qty: number): Milli =>
+  new Decimal(String(qty)).mul(1000).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
 
 /** Charge for `qtyMilli` units at `priceCents` each, rounded to whole cents. */
 export const lineAmount = (priceCents: Cents, qtyMilli: Milli): Cents =>
-  Math.round((priceCents * qtyMilli) / 1000);
+  new Decimal(priceCents)
+    .mul(qtyMilli)
+    .div(1000)
+    .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
+    .toNumber();
 
 /** Parse a user-entered price (RM) into cents, rejecting junk/negatives. */
 export function priceCentsFrom(value: unknown): Cents {
@@ -27,8 +34,9 @@ export const fmtMoney = (cents: Cents, prefix = "RM"): string =>
   `${prefix} ${toRM(cents).toFixed(2)}`;
 
 export const fmtQty = (milli: Milli): string => {
-  const q = toQty(milli);
-  return Number.isInteger(q) ? String(q) : q.toFixed(1);
+  // Quantities are stored as thousandths. Decimal keeps all meaningful digits
+  // (1.25 and 1.005) while omitting insignificant zeroes (1.500 -> 1.5).
+  return new Decimal(milli).div(1000).toDecimalPlaces(3).toString();
 };
 
 // "each" reads badly with a count ("1 each"); show pc/pcs instead. Other units

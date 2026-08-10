@@ -97,7 +97,7 @@ function pick(c: { d: Dayjs; disabled: boolean }): void {
           c.disabled
             ? 'bg-transparent text-faint opacity-30 cursor-not-allowed'
             : c.isSelected
-              ? 'bg-ink text-white font-800 cursor-pointer'
+              ? 'bg-date text-white font-800 cursor-pointer'
               : c.isToday
                 ? 'bg-panel text-olive font-800 cursor-pointer'
                 : c.inMonth

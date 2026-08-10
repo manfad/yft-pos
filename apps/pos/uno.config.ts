@@ -29,6 +29,7 @@ export default defineConfig({
       olive: "#6e8a4e",
       oliveDark: "#5d763f",
       terracotta: "#c4753f",
+      date: "#9f5125",
       chart: "#a9bf83",
       warm: "#f3ead3",
       warmBorder: "#d9c6a3",
