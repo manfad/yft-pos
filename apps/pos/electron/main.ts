@@ -169,6 +169,53 @@ const getSetting = (key: string): string | null => {
   }
 };
 
+// SMTP credentials come from a .env file (never the DB): SMTP_USER is the
+// dedicated Gmail address, SMTP_PASS its App Password. Searched in order:
+// userData dir, next to the executable, then the working dir (dev). Legacy
+// settings-table values remain as a fallback for installs configured in-app.
+const dotEnv: Record<string, string> = {};
+
+function loadDotEnv(): void {
+  const candidates = [
+    path.join(app.getPath("userData"), ".env"),
+    path.join(path.dirname(app.getPath("exe")), ".env"),
+    path.join(process.cwd(), ".env"),
+  ];
+  for (const file of candidates) {
+    let text = "";
+    try {
+      text = fs.readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    for (const line of text.split(/\r?\n/)) {
+      const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/.exec(line);
+      if (!m || line.trim().startsWith("#")) continue;
+      const value = m[2]!.replace(/^["']|["']$/g, "");
+      if (!(m[1]! in dotEnv)) dotEnv[m[1]!] = value;
+    }
+  }
+}
+
+const smtpUser = (): string | null => dotEnv.SMTP_USER || getSetting("smtp_user");
+const smtpPass = (): string | null => dotEnv.SMTP_PASS || getSetting("smtp_pass");
+
+/** Report recipients: newline/comma-separated list in settings (`report_recipients`). */
+function reportRecipients(): string[] {
+  const list = (getSetting("report_recipients") ?? "")
+    .split(/[\n,;]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.includes("@"));
+  if (list.length) return list;
+  const legacy = getSetting("report_recipient");
+  return legacy ? [legacy] : [];
+}
+
+ipcMain.handle("mailer:config", () => ({
+  hasCredentials: !!(smtpUser() && smtpPass()),
+  user: smtpUser(),
+}));
+
 let mailerBusy = false;
 
 async function processOutbox(): Promise<{ sent: number; pending: number; lastError: string | null }> {
@@ -194,12 +241,13 @@ async function processOutbox(): Promise<{ sent: number; pending: number; lastErr
     }
     if (rows.length === 0) return { sent: 0, pending: 0, lastError: null };
 
-    const user = getSetting("smtp_user");
-    const pass = getSetting("smtp_pass");
-    const to = getSetting("report_recipient");
-    if (!user || !pass || !to) {
+    const user = smtpUser();
+    const pass = smtpPass();
+    const recipients = reportRecipients();
+    if (!user || !pass || recipients.length === 0) {
       return { sent: 0, pending: rows.length, lastError: "email not configured" };
     }
+    const to = recipients.join(", ");
     const transporter = nodemailer.createTransport({ service: "gmail", auth: { user, pass } });
 
     // One DB snapshot per batch — attached to each report as the offsite backup.
@@ -269,6 +317,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  loadDotEnv();
   dbPath = path.join(app.getPath("userData"), "yft-pos.sqlite");
   fresh = !fs.existsSync(dbPath);
   db = openDb();

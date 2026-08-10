@@ -29,6 +29,8 @@ export interface PrintingBridge {
 export interface MailerBridge {
   /** Try to send every unsent outbox row now; returns what happened. */
   process(): Promise<{ sent: number; pending: number; lastError: string | null }>;
+  /** Sender credentials status — SMTP_USER/SMTP_PASS come from .env on the till. */
+  config?(): Promise<{ hasCredentials: boolean; user: string | null }>;
 }
 
 declare global {

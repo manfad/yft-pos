@@ -43,7 +43,7 @@ async function send(): Promise<void> {
   try {
     if (!(await emailConfigured())) {
       status.value = "error";
-      note.value = "Email is not set up yet — open Items → Settings and fill in the HQ email + Gmail details.";
+      note.value = "Email is not set up yet — add the HQ emails in Items → Settings, and SMTP_USER/SMTP_PASS to the till's .env file.";
       return;
     }
     const repo = await getRepo();

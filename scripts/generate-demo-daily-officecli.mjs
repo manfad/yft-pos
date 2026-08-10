@@ -125,25 +125,40 @@ cmds.push({ command: "add", parent: "/", type: "sheet", props: { name: "Fish Sal
 cmds.push({ command: "add", parent: "/", type: "sheet", props: { name: "Sales Detail", tabColor: "ED7D31" } });
 cmds.push({ command: "add", parent: "/", type: "sheet", props: { name: "Credit", tabColor: "C00000" } });
 
-colw(S1, "A", 24); colw(S1, "B", 12); colw(S1, "C", 10); colw(S1, "D", 12); colw(S1, "E", 14); colw(S1, "F", 14);
-title(S1, "F", `${STORE} — SALES LIST`, DATE_LABEL);
-header(S1, 4, [["A", "Name"], ["B", "Date"], ["C", "Inv No"], ["D", "Pay Type"], ["E", "Cash (RM)", "right"], ["F", "Credit (RM)", "right"]]);
+colw(S1, "A", 6); colw(S1, "B", 24); colw(S1, "C", 12); colw(S1, "D", 10); colw(S1, "E", 12); colw(S1, "F", 14); colw(S1, "G", 14);
+title(S1, "G", `${STORE} — SALES LIST`, DATE_LABEL);
+header(S1, 4, [["A", "#"], ["B", "Name"], ["C", "Date"], ["D", "Inv No"], ["E", "Pay Type"], ["F", "Cash (RM)", "right"], ["G", "Credit (RM)", "right"]]);
 let r = 5;
+let idx = 1;
 for (const o of valid) {
   const credit = o.method === "Credit";
-  cell(S1, `A${r}`, { value: credit ? o.creditor : "" });
-  cell(S1, `B${r}`, { value: DATE, numberformat: "@" });
-  cell(S1, `C${r}`, { value: o.inv });
-  cell(S1, `D${r}`, { value: o.method });
-  if (credit) cell(S1, `F${r}`, { value: orderTotal(o), numberformat: MONEY });
-  else cell(S1, `E${r}`, { value: orderTotal(o), numberformat: MONEY });
+  cell(S1, `A${r}`, { value: idx++ });
+  cell(S1, `B${r}`, { value: credit ? o.creditor : "" });
+  cell(S1, `C${r}`, { value: DATE, numberformat: "@" });
+  cell(S1, `D${r}`, { value: o.inv });
+  cell(S1, `E${r}`, { value: o.method });
+  if (credit) cell(S1, `G${r}`, { value: orderTotal(o), numberformat: MONEY });
+  else cell(S1, `F${r}`, { value: orderTotal(o), numberformat: MONEY });
   r++;
 }
 cell(S1, `A${r}`, { value: "TOTAL", bold: true, "border.top": "double" });
-["B", "C", "D"].forEach((c) => cell(S1, `${c}${r}`, { "border.top": "double" }));
-cell(S1, `E${r}`, { formula: `SUM(E5:E${r - 1})`, numberformat: MONEY, bold: true, "border.top": "double" });
+["B", "C", "D", "E"].forEach((c) => cell(S1, `${c}${r}`, { "border.top": "double" }));
 cell(S1, `F${r}`, { formula: `SUM(F5:F${r - 1})`, numberformat: MONEY, bold: true, "border.top": "double" });
+cell(S1, `G${r}`, { formula: `SUM(G5:G${r - 1})`, numberformat: MONEY, bold: true, "border.top": "double" });
 r += 2;
+// Voided sales sit below the total, struck through — visible but counted nowhere.
+cell(S1, `A${r}`, { value: "CANCELLED", bold: true, fill: "D9E2DC", merge: `A${r}:G${r}` });
+r++;
+for (const o of orders.filter((v) => v.voided)) {
+  const credit = o.method === "Credit";
+  cell(S1, `B${r}`, { value: credit ? o.creditor : "", strike: true });
+  cell(S1, `C${r}`, { value: DATE, numberformat: "@", strike: true });
+  cell(S1, `D${r}`, { value: o.inv, strike: true });
+  cell(S1, `E${r}`, { value: o.method, strike: true });
+  cell(S1, credit ? `G${r}` : `F${r}`, { value: orderTotal(o), numberformat: MONEY, strike: true });
+  r++;
+}
+r++;
 cell(S1, `A${r}`, { value: `${valid.length} sale(s), ${orders.length - valid.length} voided`, "font.color": "666666" });
 sheetSet(S1, { freeze: "A5" });
 
@@ -179,24 +194,26 @@ sheetSet(S2, { freeze: "A5" });
 // One row per sale that contains fish. Cash/Credit carry the full invoice
 // amount; the qty column is the fish head count (ekor) — fish sell by ekor.
 const S3 = "Fish Sales";
-colw(S3, "A", 10); colw(S3, "B", 12); colw(S3, "C", 14); colw(S3, "D", 14); colw(S3, "E", 16);
-title(S3, "E", "FISH SALES", DATE_LABEL);
-header(S3, 4, [["A", "Inv No"], ["B", "Pay Type"], ["C", "Cash (RM)", "right"], ["D", "Credit (RM)", "right"], ["E", "Fish Qty (Ekor)", "right"]]);
+colw(S3, "A", 6); colw(S3, "B", 10); colw(S3, "C", 12); colw(S3, "D", 14); colw(S3, "E", 14); colw(S3, "F", 16);
+title(S3, "F", "FISH SALES", DATE_LABEL);
+header(S3, 4, [["A", "#"], ["B", "Inv No"], ["C", "Pay Type"], ["D", "Cash (RM)", "right"], ["E", "Credit (RM)", "right"], ["F", "Fish Qty (Ekor)", "right"]]);
 r = 5;
+idx = 1;
 for (const o of fishSales) {
   const credit = o.method === "Credit";
-  cell(S3, `A${r}`, { value: o.inv });
-  cell(S3, `B${r}`, { value: o.method });
-  if (credit) cell(S3, `D${r}`, { value: orderTotal(o), numberformat: MONEY });
-  else cell(S3, `C${r}`, { value: orderTotal(o), numberformat: MONEY });
-  cell(S3, `E${r}`, { value: fishEkor(o) });
+  cell(S3, `A${r}`, { value: idx++ });
+  cell(S3, `B${r}`, { value: o.inv });
+  cell(S3, `C${r}`, { value: o.method });
+  if (credit) cell(S3, `E${r}`, { value: orderTotal(o), numberformat: MONEY });
+  else cell(S3, `D${r}`, { value: orderTotal(o), numberformat: MONEY });
+  cell(S3, `F${r}`, { value: fishEkor(o) });
   r++;
 }
 cell(S3, `A${r}`, { value: "TOTAL", bold: true, "border.top": "double" });
-cell(S3, `B${r}`, { "border.top": "double" });
-cell(S3, `C${r}`, { formula: `SUM(C5:C${r - 1})`, numberformat: MONEY, bold: true, "border.top": "double" });
+["B", "C"].forEach((c) => cell(S3, `${c}${r}`, { "border.top": "double" }));
 cell(S3, `D${r}`, { formula: `SUM(D5:D${r - 1})`, numberformat: MONEY, bold: true, "border.top": "double" });
-cell(S3, `E${r}`, { formula: `SUM(E5:E${r - 1})`, bold: true, "border.top": "double" });
+cell(S3, `E${r}`, { formula: `SUM(E5:E${r - 1})`, numberformat: MONEY, bold: true, "border.top": "double" });
+cell(S3, `F${r}`, { formula: `SUM(F5:F${r - 1})`, bold: true, "border.top": "double" });
 sheetSet(S3, { freeze: "A5" });
 
 // ----------------------------------------------------- sheet 4: Sales Detail
@@ -277,11 +294,12 @@ r += 2;
 // Outstanding balance per creditor — who owes what across every invoice.
 cell(S5, `A${r}`, { value: "BY CREDITOR", bold: true, fill: "D9E2DC", merge: `A${r}:D${r}` });
 r++;
-header(S5, r, [["A", "Name"], ["C", "Invoices", "right"], ["D", "Amount (RM)", "right"]]);
+cell(S5, `A${r}`, { value: "Name", bold: true, fill: "D9E2DC", "border.bottom": "medium", merge: `A${r}:B${r}` });
+header(S5, r, [["C", "Invoices", "right"], ["D", "Amount (RM)", "right"]]);
 r++;
 const creditorFirst = r;
 for (const [name, t] of creditors) {
-  cell(S5, `A${r}`, { value: name });
+  cell(S5, `A${r}`, { value: name, merge: `A${r}:B${r}` });
   cell(S5, `C${r}`, { value: t.count, halign: "right" });
   cell(S5, `D${r}`, { value: t.amount, numberformat: MONEY });
   r++;

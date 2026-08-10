@@ -24,4 +24,5 @@ contextBridge.exposeInMainWorld("printing", {
 // Outbox mailer — "try to send the queued HQ reports now".
 contextBridge.exposeInMainWorld("mailer", {
   process: () => ipcRenderer.invoke("mailer:process"),
+  config: () => ipcRenderer.invoke("mailer:config"),
 });

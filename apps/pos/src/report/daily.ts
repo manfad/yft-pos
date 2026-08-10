@@ -22,9 +22,9 @@ export const DAILY_WORKBOOK_TEMPLATE_VERSION = 2;
 //   Fish Sales — one row per sale containing fish; qty is the ekor count
 //   Sales Detail — every sale as its own block, voided ones marked
 //   Credit — today's credit sales, then the full outstanding ledger
-export const SALES_LIST_HEADERS = ["Name", "Date", "Inv No", "Pay Type", "Cash", "Credit"] as const;
+export const SALES_LIST_HEADERS = ["#", "Name", "Date", "Inv No", "Pay Type", "Cash", "Credit"] as const;
 export const TODAY_SALES_HEADERS = ["Item", "Unit Price (RM)", "Qty", "Amount (RM)"] as const;
-export const FISH_SALES_HEADERS = ["Inv No", "Pay Type", "Cash", "Credit", "Fish Qty (Ekor)"] as const;
+export const FISH_SALES_HEADERS = ["#", "Inv No", "Pay Type", "Cash", "Credit", "Fish Qty (Ekor)"] as const;
 export const CREDIT_HEADERS = ["Date", "Inv No", "Name", "Amount (RM)"] as const;
 
 const validOrders = (orders: Order[]): Order[] =>
@@ -78,9 +78,11 @@ function setNumberFormat(
 /** Sheet 1 — every sale on one row, amount split into Cash/Credit columns. */
 function salesListSheet(orders: Order[]): XLSX.WorkSheet {
   const sales = validOrders(orders);
-  const rows: (string | number)[][] = sales.map((order) => {
+  const voided = [...orders].filter((order) => order.voidedAt != null).sort((a, b) => a.ts - b.ts);
+  const rows: (string | number)[][] = sales.map((order, index) => {
     const [cash, credit] = cashCredit(order);
     return [
+      index + 1,
       order.method === "Credit" ? (order.creditorName ?? "") : "",
       order.businessDate,
       order.id,
@@ -90,19 +92,28 @@ function salesListSheet(orders: Order[]): XLSX.WorkSheet {
     ];
   });
   const totalRow = sales.length + 2;
+  // Voided sales sit below the total — visible but counted nowhere. xlsx (CE)
+  // cannot write strikethrough, so the Name column carries a VOIDED marker.
+  const voidedRows: (string | number)[][] = voided.map((order) => {
+    const [cash, credit] = cashCredit(order);
+    const name = order.method === "Credit" ? (order.creditorName ?? "") : "";
+    return ["", name ? `${name} (VOIDED)` : "VOIDED", order.businessDate, order.id, order.method, cash, credit];
+  });
   const sheet = XLSX.utils.aoa_to_sheet([
     [...SALES_LIST_HEADERS],
     ...rows,
-    ["TOTAL", "", "", "", 0, 0],
+    ["TOTAL", "", "", "", "", 0, 0],
+    ...(voidedRows.length ? [[], ["CANCELLED"], ...voidedRows] : []),
   ]);
-  setFormulaOrZero(sheet, `E${totalRow}`, "E", 2, sales.length);
   setFormulaOrZero(sheet, `F${totalRow}`, "F", 2, sales.length);
-  setNumberFormat(sheet, 4, 1, totalRow - 1, "0.00");
-  setNumberFormat(sheet, 5, 1, totalRow - 1, "0.00");
+  setFormulaOrZero(sheet, `G${totalRow}`, "G", 2, sales.length);
+  const lastRow = totalRow + (voidedRows.length ? voidedRows.length + 2 : 0) - 1;
+  setNumberFormat(sheet, 5, 1, lastRow, "0.00");
+  setNumberFormat(sheet, 6, 1, lastRow, "0.00");
   sheet["!cols"] = [
-    { wch: 24 }, { wch: 13 }, { wch: 11 }, { wch: 12 }, { wch: 14 }, { wch: 14 },
+    { wch: 5 }, { wch: 24 }, { wch: 13 }, { wch: 11 }, { wch: 12 }, { wch: 14 }, { wch: 14 },
   ];
-  sheet["!autofilter"] = { ref: `A1:F${Math.max(1, sales.length + 1)}` };
+  sheet["!autofilter"] = { ref: `A1:G${Math.max(1, sales.length + 1)}` };
   return sheet;
 }
 
@@ -149,24 +160,24 @@ function todaySalesSheet(orders: Order[]): XLSX.WorkSheet {
 /** Sheet 3 — one row per sale containing fish; the qty column is ekor. */
 function fishSalesSheet(orders: Order[]): XLSX.WorkSheet {
   const sales = validOrders(orders).filter((order) => fishEkor(order) > 0);
-  const rows: (string | number)[][] = sales.map((order) => {
+  const rows: (string | number)[][] = sales.map((order, index) => {
     const [cash, credit] = cashCredit(order);
-    return [order.id, order.method, cash, credit, fishEkor(order)];
+    return [index + 1, order.id, order.method, cash, credit, fishEkor(order)];
   });
   const totalRow = sales.length + 2;
   const sheet = XLSX.utils.aoa_to_sheet([
     [...FISH_SALES_HEADERS],
     ...rows,
-    ["TOTAL", "", 0, 0, 0],
+    ["TOTAL", "", "", 0, 0, 0],
   ]);
-  setFormulaOrZero(sheet, `C${totalRow}`, "C", 2, sales.length);
   setFormulaOrZero(sheet, `D${totalRow}`, "D", 2, sales.length);
-  setFormulaOrZero(sheet, `E${totalRow}`, "E", 2, sales.length, "0");
-  setNumberFormat(sheet, 2, 1, totalRow - 1, "0.00");
+  setFormulaOrZero(sheet, `E${totalRow}`, "E", 2, sales.length);
+  setFormulaOrZero(sheet, `F${totalRow}`, "F", 2, sales.length, "0");
   setNumberFormat(sheet, 3, 1, totalRow - 1, "0.00");
-  setNumberFormat(sheet, 4, 1, totalRow - 1, "0");
-  sheet["!cols"] = [{ wch: 11 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
-  sheet["!autofilter"] = { ref: `A1:E${Math.max(1, sales.length + 1)}` };
+  setNumberFormat(sheet, 4, 1, totalRow - 1, "0.00");
+  setNumberFormat(sheet, 5, 1, totalRow - 1, "0");
+  sheet["!cols"] = [{ wch: 5 }, { wch: 11 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
+  sheet["!autofilter"] = { ref: `A1:F${Math.max(1, sales.length + 1)}` };
   return sheet;
 }
 
@@ -225,9 +236,15 @@ function creditSheet(orders: Order[], outstanding: Credit[]): XLSX.WorkSheet {
   rows.push(["TOTAL", "", "", 0]);
   const outTotal = rows.length;
   // Outstanding balance per creditor — who owes what across every invoice.
+  // The name spans A:B so the summary has no dead column in the middle.
+  const merges: XLSX.Range[] = [];
+  const mergeNameCell = () =>
+    merges.push({ s: { r: rows.length - 1, c: 0 }, e: { r: rows.length - 1, c: 1 } });
   rows.push([]);
   rows.push(["BY CREDITOR"]);
+  merges.push({ s: { r: rows.length - 1, c: 0 }, e: { r: rows.length - 1, c: 3 } });
   rows.push(["Name", "", "Invoices", "Amount (RM)"]);
+  mergeNameCell();
   const byCreditor = new Map<string, { count: number; cents: number }>();
   for (const credit of sorted) {
     const cur = byCreditor.get(credit.name) ?? { count: 0, cents: 0 };
@@ -237,10 +254,14 @@ function creditSheet(orders: Order[], outstanding: Credit[]): XLSX.WorkSheet {
   }
   const creditors = [...byCreditor.entries()].sort((a, b) => b[1].cents - a[1].cents);
   const creditorFirst = rows.length + 1;
-  for (const [name, t] of creditors) rows.push([name, "", t.count, toRM(t.cents)]);
+  for (const [name, t] of creditors) {
+    rows.push([name, "", t.count, toRM(t.cents)]);
+    mergeNameCell();
+  }
   rows.push(["TOTAL", "", "", 0]);
   const creditorTotal = rows.length;
   const sheet = XLSX.utils.aoa_to_sheet(rows);
+  sheet["!merges"] = merges;
   setFormulaOrZero(sheet, `D${todayTotal}`, "D", todayFirst, today.length);
   setFormulaOrZero(sheet, `D${outTotal}`, "D", outFirst, sorted.length);
   setFormulaOrZero(sheet, `D${creditorTotal}`, "D", creditorFirst, creditors.length);

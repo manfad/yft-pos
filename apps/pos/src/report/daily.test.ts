@@ -92,11 +92,13 @@ describe("daily Excel workbook (template v2)", () => {
     const workbook = buildDailyWorkbook(orders);
     const list = rowsOf(workbook, "Sales List");
     expect(list[0]).toEqual([...SALES_LIST_HEADERS]);
-    expect(list[1]).toEqual(["", "2026-08-10", 101, "Cash", 69.3, ""]);
-    expect(list[2]).toEqual(["Pak Abu", "2026-08-10", 102, "Credit", "", 12]);
-    expect(list.flat()).not.toContain(103); // voided sale excluded
-    expect(workbook.Sheets["Sales List"]!["E4"]?.f).toBe("SUM(E2:E3)");
+    expect(list[1]).toEqual([1, "", "2026-08-10", 101, "Cash", 69.3, ""]);
+    expect(list[2]).toEqual([2, "Pak Abu", "2026-08-10", 102, "Credit", "", 12]);
     expect(workbook.Sheets["Sales List"]!["F4"]?.f).toBe("SUM(F2:F3)");
+    expect(workbook.Sheets["Sales List"]!["G4"]?.f).toBe("SUM(G2:G3)");
+    // Voided sales are listed below the total under a CANCELLED title, uncounted.
+    expect(list[5]?.[0]).toBe("CANCELLED");
+    expect(list[6]).toEqual(["", "VOIDED", "2026-08-10", 103, "QR", 9.99, ""]);
   });
 
   it("merges qty with its unit on Today Sales", () => {
@@ -115,10 +117,10 @@ describe("daily Excel workbook (template v2)", () => {
     const fish = rowsOf(workbook, "Fish Sales");
     expect(fish[0]).toEqual([...FISH_SALES_HEADERS]);
     // order 101 has tilapia (3 ekor) — full invoice amount in Cash.
-    expect(fish[1]).toEqual([101, "Cash", 69.3, "", 3]);
+    expect(fish[1]).toEqual([1, 101, "Cash", 69.3, "", 3]);
     // order 102 is chicken-only, order 103 is voided — neither appears.
     expect(fish).toHaveLength(3); // header + one fish sale + total
-    expect(workbook.Sheets["Fish Sales"]!["E3"]?.f).toBe("SUM(E2:E2)");
+    expect(workbook.Sheets["Fish Sales"]!["F3"]?.f).toBe("SUM(F2:F2)");
   });
 
   it("stacks today's credit sales above the outstanding ledger", () => {
@@ -144,9 +146,9 @@ describe("daily Excel workbook (template v2)", () => {
     const list = workbook.Sheets["Sales List"]!;
     expect(rowsOf(workbook, "Sales List")).toEqual([
       [...SALES_LIST_HEADERS],
-      ["TOTAL", "", "", "", 0, 0],
+      ["TOTAL", "", "", "", "", 0, 0],
     ]);
-    expect(list["E2"]?.v).toBe(0);
-    expect(list["E2"]?.f).toBeUndefined();
+    expect(list["F2"]?.v).toBe(0);
+    expect(list["F2"]?.f).toBeUndefined();
   });
 });
