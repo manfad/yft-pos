@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import { computeStats, fmtMoney, localDateStr, type DayClose, type Order } from "@yf/core";
 import { getRepo } from "../db";
 import { currentCompany } from "../place";
-import { getTodayClose, performClose, performReopen } from "../business";
+import { getTodayClose, performClose, performReopen, type DailyReportDelivery } from "../business";
 import PinDialog from "./PinDialog.vue";
 import Loading from "./Loading.vue";
 
@@ -19,14 +19,26 @@ const orders = ref<Order[]>([]);
 const closedAs = ref<DayClose | null>(null);
 const step = ref<"summary" | "confirm" | "working" | "done">("summary");
 const pinOpen = ref(false);
+const delivery = shallowRef<DailyReportDelivery | null>(null);
 
 const stats = computed(() => computeStats(orders.value, "today"));
 
 async function load(): Promise<void> {
   const repo = await getRepo();
   today.value = localDateStr(Date.now());
-  closedAs.value = await getTodayClose(currentCompany.value.id);
-  orders.value = await repo.listOrdersByBusinessDate(today.value, today.value, currentCompany.value.id);
+  const [dayClose, dayOrders, outbox] = await Promise.all([
+    getTodayClose(currentCompany.value.id),
+    repo.listOrdersByBusinessDate(today.value, today.value, currentCompany.value.id),
+    repo.listOutbox(today.value),
+  ]);
+  closedAs.value = dayClose;
+  orders.value = dayOrders;
+  const report = outbox.find(
+    (row) =>
+      row.companyId === currentCompany.value.id &&
+      row.attachmentName?.endsWith(`-close-day-${today.value}.xlsx`),
+  );
+  delivery.value = report ? (report.sentAt != null ? "sent" : "queued") : null;
   step.value = "summary";
 }
 
@@ -40,11 +52,12 @@ watch(
 async function confirmClose(): Promise<void> {
   step.value = "working";
   try {
-    await performClose(today.value, {
+    const result = await performClose(today.value, {
       companyId: currentCompany.value.id,
       companyName: currentCompany.value.name,
       print: true,
     });
+    delivery.value = result.delivery;
     step.value = "done";
     await new Promise((r) => setTimeout(r, 1200));
     emit("closed", today.value);
@@ -53,6 +66,29 @@ async function confirmClose(): Promise<void> {
     await load();
   }
 }
+
+async function retryReport(): Promise<void> {
+  step.value = "working";
+  try {
+    const result = await performClose(today.value, {
+      companyId: currentCompany.value.id,
+      companyName: currentCompany.value.name,
+      print: false,
+    });
+    delivery.value = result.delivery;
+    step.value = "done";
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    emit("closed", today.value);
+  } catch {
+    await load();
+  }
+}
+
+const doneMessage = computed(() =>
+  delivery.value === "sent"
+    ? "Day closed — report sent to HQ"
+    : "Day closed — report saved and queued for retry",
+);
 
 async function reopen(): Promise<void> {
   pinOpen.value = false;
@@ -77,7 +113,7 @@ const closedAtText = computed(() =>
       <template v-if="step === 'working' || step === 'done'">
         <Loading
           :state="step === 'done' ? 'success' : 'loading'"
-          :message="step === 'done' ? 'Day closed — report printed & sent to HQ' : 'Closing the day…'"
+          :message="step === 'done' ? doneMessage : 'Closing the day…'"
         />
       </template>
 
@@ -90,6 +126,9 @@ const closedAtText = computed(() =>
             {{ today }} was closed at {{ closedAtText }}{{ closedAs.auto ? " (auto)" : "" }}.<br />
             New sales now count toward tomorrow.
           </div>
+          <div class="text-14px font-800 mt-9px" :class="delivery === 'sent' ? 'text-oliveDark' : 'text-terracotta'">
+            {{ delivery === "sent" ? "HQ report sent." : delivery === "queued" ? "HQ report queued for automatic retry." : "HQ report is not queued yet." }}
+          </div>
         </div>
         <div class="px-26px py-22px flex flex-col gap-12px">
           <button class="btn-pay h-56px text-19px" @click="$emit('close')">OK</button>
@@ -97,6 +136,11 @@ const closedAtText = computed(() =>
             class="h-52px rounded-16px border-2 border-border bg-white text-16px font-800 text-muted cursor-pointer press"
             @click="pinOpen = true"
           >Reopen day (PIN)</button>
+          <button
+            v-if="delivery !== 'sent'"
+            class="h-52px rounded-16px border-2 border-olive bg-[#eef3e5] text-16px font-900 text-oliveDark cursor-pointer press"
+            @click="retryReport"
+          >{{ delivery === "queued" ? "Retry report now" : "Create and queue report" }}</button>
         </div>
       </template>
 

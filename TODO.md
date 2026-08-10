@@ -1,4 +1,4 @@
-# TODO — tomorrow morning (2026-06-25)
+# TODO / delivery log
 
 Three tasks, in order. File pointers are from a code scan done 2026-06-24.
 
@@ -57,7 +57,11 @@ Changes:
 
 ---
 
-## 3. Credit system (pay-later / creditors)
+## 3. Credit system (pay-later / creditors) — ✅ DONE (2026-08-10)
+
+Shipped: Credit payment method, required creditor picker with add-new and
+previous names, persisted credit rows, outstanding-credit report panel, receipt
+history, and single/all-credit clearing actions.
 
 In the checkout payment-type dialog (currently Cash | Bank | QR), add a **Credit**
 option. Tapping Credit opens a second dialog:
@@ -91,7 +95,19 @@ Changes:
 
 ---
 
-## 4. Excel export
+## 4. Excel export — ✅ DONE (2026-08-10)
+
+Shipped: **Export Excel** on `/report` and a stable workbook with four sheets:
+
+- **HQ Daily** — one row per invoice with creditor, amount/credit, fish quantity,
+  fish Ekor, chicken Ekor, remarks, and footer totals.
+- **Invoice Items** — one row per sold item with item/unit/qty/Ekor/unit price,
+  line amount, credit amount, and remarks, so non-fish products remain visible.
+- **Sales Export** — compact receipt export with fish and chicken split.
+- **Totals** — per-item and payment-method reconciliation.
+
+Voided sales are excluded from invoice exports but shown in reconciliation.
+The workbook includes an empty-sales footer and stable column widths/formats.
 
 Export orders to an Excel/spreadsheet file. One row per receipt (order), columns:
 
@@ -107,18 +123,26 @@ date | time | receipt no | amount | qty | tail (fish) | tail (chicken) | pay_typ
 Changes:
 - `apps/pos/src/views/ReportView.vue` (or a new export button) — add "Export Excel".
 - depends on tasks 1 + 3 for the tail and Credit columns.
-- pick a lib (e.g. SheetJS/`xlsx`) or emit CSV that opens in Excel — decide tomorrow.
+- implemented with the existing SheetJS/`xlsx` dependency.
 
 ---
 
-## 5. Post-MVP: daily admin Excel template + automatic email
+## 5. Daily admin Excel template + automatic email — ✅ DONE (2026-08-10)
+
+Shipped: Close Day finalises the business date, builds the same versioned HQ
+workbook, queues it in the offline outbox, attempts immediate delivery, prints
+the roll report, and navigates to `/report`. The dialog now distinguishes
+**sent** from **queued for automatic retry** and can recreate/retry a missing
+report. A stable `close-day-YYYY-MM-DD.xlsx` artifact name makes repeat Close
+Day calls idempotent without confusing an earlier manual report email.
 
 After the basic app is finished, add a reusable `.xlsx` template for the daily report
 that is emailed to the admin at Close Day. Use one row per invoice/order with these
-columns, in this order:
+base columns, expanded after HQ staff requested separate fish/chicken detail:
 
 ```
-Name | Date | Inv No | Pay Type | Amount | Credit | Qty (Ekor) | Remarks
+Name | Date | Inv No | Pay Type | Amount | Credit | Fish Qty |
+Fish Qty (Ekor) | Chicken Qty (Ekor) | Remarks
 ```
 
 Close Day workflow:
@@ -139,13 +163,26 @@ Rules:
 - `Pay Type` = Cash, Bank, QR, or Credit.
 - `Amount` = full invoice total.
 - `Credit` = the invoice amount only when `Pay Type` is `Credit`; otherwise leave blank.
-- `Qty (Ekor)` = total `tail_count` across the order's tail-tracking lines.
+- `Fish Qty` and `Fish Qty (Ekor)` include fish lines only.
+- `Chicken Qty (Ekor)` is separate so it cannot be mistaken for fish.
+- Non-fish quantities are preserved in the **Invoice Items** sheet.
 - `Remarks` = blank by default, available for admin/cashier notes later.
 - Add a footer row that totals `Amount`, `Credit`, and `Qty (Ekor)`.
 - Generate one workbook per company and business date, attach it to the existing daily
   report email/outbox flow, and keep the template formatting stable across exports.
 
 Implementation notes:
-- Keep the workbook template as a versioned app asset; populate it with SheetJS/`xlsx`.
+- Keep the workbook template versioned in code and populate it with SheetJS/`xlsx`.
 - Add regression tests for normal payments, Credit name/amount population, Ekor totals,
   footer formulas/totals, and an empty-sales day.
+
+---
+
+## 6. HQ workbook visual review — ⬜ REVIEW LATER
+
+- Generate a representative demo workbook containing Cash, Credit, fish,
+  chicken, non-fish products, a voided invoice, and an empty-sales day.
+- Open and recalculate it with an available Office-compatible CLI (for example,
+  LibreOffice headless), then render the sheets to PDF/images.
+- Share the `.xlsx` and rendered sheets for owner/HQ staff review before changing
+  template version 1.

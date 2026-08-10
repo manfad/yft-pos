@@ -27,25 +27,42 @@ export async function getTodayClose(companyId: number): Promise<DayClose | null>
   return repo.getDayClose(localDateStr(Date.now()), companyId);
 }
 
+export type DailyReportDelivery = "sent" | "queued";
+
 async function queueDailyEmail(
   companyId: number,
   companyName: string,
   businessDate: string,
   orders: Order[],
   auto: boolean,
-): Promise<void> {
+): Promise<DailyReportDelivery> {
   const repo = await getRepo();
   const catalog = await repo.listItems(true, companyId);
-  await repo.queueEmail({
-    companyId,
-    businessDate,
-    subject: dailyEmailSubject(companyName, businessDate, auto),
-    body: dailyEmailBody(companyName, businessDate, orders, auto),
-    attachmentName: `${companyName.replace(/\s+/g, "-")}-sales-${businessDate}.xlsx`,
-    attachmentB64: buildDailyExcelB64(orders, catalog),
-  });
-  // Nudge the main-process mailer; it also retries on its own timer.
-  void window.mailer?.process().catch(() => {});
+  // A Close Day artifact has its own stable name so an earlier manual export/
+  // email cannot suppress the final end-of-day workbook.
+  const attachmentName = `${companyName.replace(/\s+/g, "-")}-close-day-${businessDate}.xlsx`;
+  const existing = (await repo.listOutbox(businessDate)).find(
+    (row) => row.companyId === companyId && row.attachmentName === attachmentName,
+  );
+  if (!existing) {
+    await repo.queueEmail({
+      companyId,
+      businessDate,
+      subject: dailyEmailSubject(companyName, businessDate, auto),
+      body: dailyEmailBody(companyName, businessDate, orders, auto),
+      attachmentName,
+      attachmentB64: buildDailyExcelB64(orders, catalog),
+    });
+  } else if (existing.sentAt != null) {
+    return "sent";
+  }
+
+  // Nudge the main-process mailer; an offline failure remains safely queued.
+  await window.mailer?.process().catch(() => undefined);
+  const current = (await repo.listOutbox(businessDate)).find(
+    (row) => row.companyId === companyId && row.attachmentName === attachmentName,
+  );
+  return current?.sentAt != null ? "sent" : "queued";
 }
 
 /**
@@ -55,18 +72,27 @@ async function queueDailyEmail(
 export async function performClose(
   businessDate: string,
   opts: { companyId: number; companyName: string; auto?: boolean; print?: boolean },
-): Promise<Order[]> {
+): Promise<{ orders: Order[]; delivery: DailyReportDelivery }> {
   const repo = await getRepo();
   const orders = await repo.listOrdersByBusinessDate(businessDate, businessDate, opts.companyId);
-  await repo.closeDay(businessDate, { companyId: opts.companyId, auto: opts.auto ?? false });
-  await queueDailyEmail(opts.companyId, opts.companyName, businessDate, orders, opts.auto ?? false);
-  if (opts.print) {
+  const alreadyClosed = await repo.getDayClose(businessDate, opts.companyId);
+  if (!alreadyClosed) {
+    await repo.closeDay(businessDate, { companyId: opts.companyId, auto: opts.auto ?? false });
+  }
+  const delivery = await queueDailyEmail(
+    opts.companyId,
+    opts.companyName,
+    businessDate,
+    orders,
+    opts.auto ?? alreadyClosed?.auto ?? false,
+  );
+  if (opts.print && !alreadyClosed) {
     const paperWidthMm = await getPaperWidthMm();
     await printHtml(
       renderDayReportHtml({ storeName: opts.companyName, businessDate, orders, paperWidthMm }),
     ).catch(() => {}); // a printer problem must not block the close
   }
-  return orders;
+  return { orders, delivery };
 }
 
 /** Undo today's close (PIN-gated in the UI). */

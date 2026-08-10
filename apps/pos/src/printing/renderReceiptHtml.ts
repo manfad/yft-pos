@@ -54,24 +54,26 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
   body {
     width: ${contentWidthMm}mm;
     max-width: ${contentWidthMm}mm;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-family: Arial, Helvetica, sans-serif;
     font-variant-numeric: tabular-nums;
+    font-weight: 600;
     color: #000;
-    line-height: 1.22;
+    line-height: 1.28;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   .receipt { width: 100%; padding: 3mm 2mm 5mm; overflow: hidden; }
   .store {
     text-align: center;
-    font-size: 12pt;
-    font-weight: 800;
+    font-size: 13pt;
+    font-weight: 900;
     letter-spacing: 0.4px;
     text-transform: uppercase;
   }
   .meta {
     text-align: center;
-    font-size: 7.5pt;
+    font-size: 8.5pt;
+    font-weight: 700;
     margin-top: 1mm;
     line-height: 1.35;
   }
@@ -81,16 +83,16 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
   }
   .item {
     margin-bottom: 2mm;
-    font-size: 8.5pt;
+    font-size: 9.5pt;
     break-inside: avoid;
   }
   .table-head {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 14mm 19mm;
     gap: 1.5mm;
-    font-size: 6.8pt;
-    font-weight: 400;
-    letter-spacing: 0.5px;
+    font-size: 7.5pt;
+    font-weight: 800;
+    letter-spacing: 0.3px;
     margin-bottom: 1.6mm;
   }
   .table-head .h-qty { text-align: right; }
@@ -108,18 +110,19 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
     gap: 0.6mm;
     overflow-wrap: anywhere;
   }
-  .item-name { font-weight: 800; }
+  .item-name { font-weight: 900; }
   .item-rate {
-    color: #333;
-    font-size: 6.7pt;
-    font-weight: 500;
+    color: #000;
+    font-size: 7.5pt;
+    font-weight: 700;
   }
   .item-qty {
+    font-weight: 700;
     text-align: right;
     white-space: nowrap;
   }
   .item-amount {
-    font-weight: 800;
+    font-weight: 900;
     white-space: nowrap;
     text-align: right;
   }
@@ -127,7 +130,7 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 3mm;
-    font-size: 13pt;
+    font-size: 14pt;
     font-weight: 900;
     line-height: 1.15;
     margin-top: 0.5mm;
@@ -136,12 +139,14 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
     display: flex;
     justify-content: space-between;
     gap: 3mm;
-    font-size: 7.5pt;
+    font-size: 8.5pt;
+    font-weight: 700;
     margin-top: 2mm;
   }
   .foot {
     text-align: center;
-    font-size: 7.2pt;
+    font-size: 8.5pt;
+    font-weight: 700;
     margin-top: 3mm;
   }
 </style>

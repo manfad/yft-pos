@@ -35,6 +35,18 @@ pnpm typecheck   # strict TS across all packages
 pnpm build       # type-checked production build of the SPA
 ```
 
+### Update and build on Windows over SSH
+
+From the repository folder, run:
+
+```bat
+build-windows.cmd
+```
+
+The script pulls with `--ff-only`, installs the locked dependencies, runs the
+tests and type checks, then creates the Windows installer and portable app in
+`apps\pos\release`.
+
 Data persists to IndexedDB; on a fresh DB the catalogue + demo orders are
 seeded so the Sales report has content. Admin → **Reset demo data** wipes it.
 

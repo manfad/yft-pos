@@ -107,7 +107,17 @@ export interface PosRepo {
   }): Promise<number>;
   /** Outbox rows for one business date (or all), newest first. */
   listOutbox(businessDate?: string): Promise<
-    Array<{ id: number; businessDate: string; subject: string; createdAt: number; sentAt: number | null; attempts: number; lastError: string | null }>
+    Array<{
+      id: number;
+      companyId: number;
+      businessDate: string;
+      subject: string;
+      attachmentName: string | null;
+      createdAt: number;
+      sentAt: number | null;
+      attempts: number;
+      lastError: string | null;
+    }>
   >;
 
   // --- credits (pay-later) ---

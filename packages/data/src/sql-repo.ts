@@ -473,7 +473,17 @@ export class SqlPosRepo implements PosRepo {
   }
 
   async listOutbox(businessDate?: string): Promise<
-    Array<{ id: number; businessDate: string; subject: string; createdAt: number; sentAt: number | null; attempts: number; lastError: string | null }>
+    Array<{
+      id: number;
+      companyId: number;
+      businessDate: string;
+      subject: string;
+      attachmentName: string | null;
+      createdAt: number;
+      sentAt: number | null;
+      attempts: number;
+      lastError: string | null;
+    }>
   > {
     const rows = await this.dz
       .select()
@@ -482,8 +492,10 @@ export class SqlPosRepo implements PosRepo {
       .orderBy(desc(outbox.createdAt));
     return rows.map((r) => ({
       id: r.id,
+      companyId: r.companyId,
       businessDate: r.businessDate,
       subject: r.subject,
+      attachmentName: r.attachmentName ?? null,
       createdAt: r.createdAt,
       sentAt: r.sentAt ?? null,
       attempts: r.attempts,
