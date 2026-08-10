@@ -42,6 +42,9 @@
       "perMachine": true,
       "runAfterFinish": false
     },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    },
     "linux": {
       "target": [
         "AppImage",
