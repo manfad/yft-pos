@@ -2,7 +2,6 @@ import * as XLSX from "xlsx";
 import {
   aggregateItemSales,
   computeStats,
-  fmtMoney,
   fmtQtyUnit,
   localDateStr,
   PAYMENT_METHODS,
@@ -321,34 +320,16 @@ export function dailyEmailSubject(storeName: string, businessDate: string, auto:
   return `${storeName} — Daily sales ${businessDate}${auto ? " (auto-closed)" : ""}`;
 }
 
-/** Plain-text body: the same numbers as the printed day report. */
+/** Plain-text cover note — all figures live in the attached workbook. */
 export function dailyEmailBody(
   storeName: string,
   businessDate: string,
-  orders: Order[],
+  _orders: Order[],
   auto: boolean,
 ): string {
-  const stats = computeStats(orders, "today");
-  const sales = aggregateItemSales(orders);
-  const voided = orders.filter((order) => order.voidedAt != null);
   const lines: string[] = [
     `${storeName} — daily sales for ${businessDate}`,
     auto ? "(Closed automatically — the day was not closed at the till.)" : "",
-    "",
-    `TOTAL: ${fmtMoney(stats.totalCents)}  (${stats.count} sales)`,
-    ...PAYMENT_METHODS.map((method) => {
-      const bucket = stats.byMethod[method];
-      return bucket.count ? `  ${method}: ${fmtMoney(bucket.totalCents)} (${bucket.count})` : "";
-    }),
-    voided.length
-      ? `  Voided: ${voided.length} sale(s), ${fmtMoney(voided.reduce((sum, order) => sum + order.totalCents, 0))} — see Excel`
-      : "",
-    "",
-    "By item:",
-    ...sales.map(
-      (sale) =>
-        `  ${sale.name}: ${toQty(sale.qtyMilli)}${sale.tailCount ? ` / ${sale.tailCount} ekor` : ""} — ${fmtMoney(sale.amountCents)}`,
-    ),
     "",
     `Excel template: v${DAILY_WORKBOOK_TEMPLATE_VERSION}`,
     "Full invoice export and reconciliation are attached.",

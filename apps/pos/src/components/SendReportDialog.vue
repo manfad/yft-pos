@@ -49,7 +49,7 @@ async function send(): Promise<void> {
     const repo = await getRepo();
     const company = currentCompany.value;
     const orders = await repo.listOrdersByBusinessDate(date.value, date.value, company.id);
-    const catalog = await repo.listItems(true, company.id);
+    const catalog = await repo.listItems(true);
     const credits = await repo.listCredits(company.id, { outstandingOnly: true });
     await repo.queueEmail({
       companyId: company.id,

@@ -24,13 +24,10 @@ export interface UnitType {
 
 export interface Item {
   id: number;
-  /** Owning company/tenant — items are sold only under their company. */
-  companyId: number;
   key: string;
   name: string;
   image: string;
   unit: Unit;
-  tint: string;
   priceCents: Cents;
   active: boolean;
   /**
@@ -54,14 +51,18 @@ export interface PricedItem extends Item {
   tiers: PriceTier[];
 }
 
-/** A line snapshot stored on the order, so receipts stay correct after edits. */
+/**
+ * An order line. The DB stores only the sale facts (item, price, qty, tail);
+ * `name`/`image`/`unit` are hydrated from the items table at read time, and the
+ * bulk-tier fields are re-derived from the item's price tiers. Items are only
+ * ever soft-deleted (`active = 0`), so the join always resolves.
+ */
 export interface OrderLine {
   id: number;
-  itemId: number | null;
+  itemId: number;
   name: string;
   image: string;
   unit: Unit;
-  tint: string;
   /** the *effective* unit price charged (after any tier discount) */
   priceCents: Cents;
   qtyMilli: Milli;
@@ -71,9 +72,9 @@ export interface OrderLine {
    * whose item doesn't track tail.
    */
   tailCount: number;
-  /** True when a quantity-break price was applied at sale time. */
+  /** True when a quantity-break price was applied at sale time (derived). */
   bulkPrice: boolean;
-  /** The quantity-break threshold that was applied, if snapshotted. */
+  /** The quantity-break threshold that was applied, if derivable. */
   bulkMinQtyMilli?: Milli;
 }
 

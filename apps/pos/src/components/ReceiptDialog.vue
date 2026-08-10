@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { buildReceipt, fmtMoney, fmtQty, unitLabel, type Order, type OrderLine } from "@yf/core";
 import { imageCss } from "../productImage";
+import { tintFromName } from "../tint";
 import { currentCompany } from "../place";
 import { printer } from "../printing/printer";
 import { PAYMENT_UI } from "../payments";
@@ -110,7 +111,7 @@ const whenStr = computed(() => {
           <div
             class="w-48px h-48px flex-none rounded-full"
             :style="{
-              backgroundColor: it.tint,
+              backgroundColor: tintFromName(it.name),
               backgroundImage: imageCss(it.image),
               backgroundSize: 'cover',
               backgroundPosition: 'center',

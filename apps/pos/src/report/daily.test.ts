@@ -16,7 +16,6 @@ const line = (partial: Partial<OrderLine> & Pick<OrderLine, "name" | "qtyMilli" 
   name: partial.name,
   image: "",
   unit: partial.unit ?? "kg",
-  tint: "#fff",
   priceCents: partial.priceCents ?? partial.amountCents,
   qtyMilli: partial.qtyMilli,
   amountCents: partial.amountCents,

@@ -84,7 +84,7 @@ async function exportExcel(): Promise<void> {
   try {
     const repo = await getRepo();
     const date = sel.value.format("YYYY-MM-DD");
-    const catalog = await repo.listItems(true, currentCompany.value.id);
+    const catalog = await repo.listItems(true);
     const credits = await repo.listCredits(currentCompany.value.id, { outstandingOnly: true });
     const filename = `${currentCompany.value.name.replace(/\s+/g, "-")}-sales-${date}.xlsx`;
     downloadDailyExcel(buildDailyExcelB64(dayOrders.value, catalog, credits), filename);

@@ -6,13 +6,10 @@ import type { Company, Credit, DayClose, Order, PaymentMethod, PricedItem, UnitT
 // trivially, while tauri-plugin-sql (async) could not be made sync.
 
 export interface ItemInput {
-  /** Owning company; defaults to 1 (the first/primary company) when omitted. */
-  companyId?: number;
   key: string;
   name: string;
   image?: string;
   unit?: Unit;
-  tint?: string;
   priceCents: number;
   /** sold by the head — capture a tail/"ekor" count alongside weight */
   tracksTail?: boolean;
@@ -38,18 +35,12 @@ export interface OrderDraft {
   /** Business day (YYYY-MM-DD) the sale counts toward; defaults to ts's local day. */
   businessDate?: string;
   lines: Array<{
-    itemId: number | null;
-    name: string;
-    image: string;
-    unit: Unit;
-    tint: string;
+    itemId: number;
+    /** the *effective* unit price charged (after any tier discount) */
     priceCents: number;
     qtyMilli: number;
-    amountCents: number;
     /** head count ("ekor") on this line; 0 when the item doesn't track tail */
     tailCount?: number;
-    bulkPrice?: boolean;
-    bulkMinQtyMilli?: number;
   }>;
 }
 
@@ -59,8 +50,8 @@ export interface PosRepo {
   listUnitTypes(): Promise<UnitType[]>;
 
   // --- items (always returned with their price tiers) ---
-  /** Items, optionally including inactive and/or scoped to one company. */
-  listItems(includeInactive?: boolean, companyId?: number): Promise<PricedItem[]>;
+  /** The catalogue, optionally including inactive (soft-deleted) items. */
+  listItems(includeInactive?: boolean): Promise<PricedItem[]>;
   getItem(id: number): Promise<PricedItem | null>;
   getItemByKey(key: string): Promise<PricedItem | null>;
   createItem(input: ItemInput): Promise<PricedItem>;

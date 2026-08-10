@@ -19,7 +19,6 @@ describe("buildReceipt", () => {
           name: "Ikan Tilapia",
           image: "",
           unit: "kg",
-          tint: "#fff",
           priceCents: 2300,
           qtyMilli: 10000,
           amountCents: 23000,
@@ -49,11 +48,11 @@ describe("buildReceipt", () => {
       totalCents: 3180,
       items: [
         {
-          id: 1, itemId: 1, name: "Ikan Tilapia", image: "", unit: "kg", tint: "#fff",
+          id: 1, itemId: 1, name: "Ikan Tilapia", image: "", unit: "kg",
           priceCents: 2500, qtyMilli: 1200, amountCents: 3000, tailCount: 6, bulkPrice: false,
         },
         {
-          id: 2, itemId: 2, name: "Fresh Milk 1 L", image: "", unit: "bottle", tint: "#fff",
+          id: 2, itemId: 2, name: "Fresh Milk 1 L", image: "", unit: "bottle",
           priceCents: 180, qtyMilli: 1000, amountCents: 180, tailCount: 0, bulkPrice: false,
         },
       ],

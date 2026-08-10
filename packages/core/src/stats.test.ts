@@ -8,7 +8,7 @@ const mk = (ts: number, method: Order["method"], totalCents: number): Order => (
 
 const line = (over: Partial<OrderLine>): OrderLine => ({
   id: 1, itemId: 1, name: "Milk", image: "", unit: "box",
-  tint: "#000", priceCents: 650, qtyMilli: 1000, amountCents: 650, tailCount: 0, bulkPrice: false, ...over,
+  priceCents: 650, qtyMilli: 1000, amountCents: 650, tailCount: 0, bulkPrice: false, ...over,
 });
 
 describe("periodRange", () => {
@@ -70,13 +70,13 @@ describe("aggregateItemSales", () => {
     expect(sales[1]).toMatchObject({ name: "Fish", qtyMilli: 3000, amountCents: 5400 });
   });
 
-  it("keys deleted items (no itemId) by name+unit", () => {
+  it("merges lines of the same item across orders", () => {
     const orders: Order[] = [
-      { ...mk(1, "Cash", 0), items: [line({ itemId: null, name: "Lime", unit: "kg", qtyMilli: 1000, amountCents: 300 })] },
-      { ...mk(2, "Cash", 0), items: [line({ itemId: null, name: "Lime", unit: "kg", qtyMilli: 2000, amountCents: 600 })] },
+      { ...mk(1, "Cash", 0), items: [line({ itemId: 9, name: "Lime", unit: "kg", qtyMilli: 1000, amountCents: 300 })] },
+      { ...mk(2, "Cash", 0), items: [line({ itemId: 9, name: "Lime", unit: "kg", qtyMilli: 2000, amountCents: 600 })] },
     ];
     const sales = aggregateItemSales(orders);
     expect(sales).toHaveLength(1);
-    expect(sales[0]).toMatchObject({ qtyMilli: 3000, amountCents: 900 });
+    expect(sales[0]).toMatchObject({ itemId: 9, qtyMilli: 3000, amountCents: 900 });
   });
 });

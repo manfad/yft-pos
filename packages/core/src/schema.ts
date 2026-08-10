@@ -16,12 +16,10 @@ CREATE TABLE IF NOT EXISTS unit_types (
 
 CREATE TABLE IF NOT EXISTS items (
   id     INTEGER PRIMARY KEY AUTOINCREMENT,
-  company_id INTEGER NOT NULL DEFAULT 1 REFERENCES companies(id),
   key    TEXT    NOT NULL UNIQUE,
   name   TEXT    NOT NULL,
   image  TEXT    NOT NULL DEFAULT '',
   unit   TEXT    NOT NULL DEFAULT 'each',
-  tint   TEXT    NOT NULL DEFAULT '#eee',
   price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
   active INTEGER NOT NULL DEFAULT 1,
   tracks_tail INTEGER NOT NULL DEFAULT 0
@@ -85,22 +83,15 @@ CREATE TABLE IF NOT EXISTS credits (
 CREATE TABLE IF NOT EXISTS order_items (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
   order_id  INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-  item_id   INTEGER REFERENCES items(id),
-  name  TEXT NOT NULL,
-  image TEXT NOT NULL DEFAULT '',
-  unit  TEXT NOT NULL DEFAULT 'each',
-  tint  TEXT NOT NULL DEFAULT '#eee',
+  item_id   INTEGER NOT NULL REFERENCES items(id),
   price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
   qty_milli   INTEGER NOT NULL CHECK (qty_milli > 0),
-  tail_count  INTEGER NOT NULL DEFAULT 0 CHECK (tail_count >= 0),
-  bulk_price  INTEGER NOT NULL DEFAULT 0,
-  bulk_min_qty_milli INTEGER
+  tail_count  INTEGER NOT NULL DEFAULT 0 CHECK (tail_count >= 0)
 );
 
 CREATE INDEX IF NOT EXISTS idx_orders_ts       ON orders(ts);
 CREATE INDEX IF NOT EXISTS idx_outbox_unsent    ON outbox(sent_at);
 CREATE INDEX IF NOT EXISTS idx_orders_company   ON orders(company_id);
-CREATE INDEX IF NOT EXISTS idx_items_company     ON items(company_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_oid ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_price_tiers_iid ON price_tiers(item_id);
 CREATE INDEX IF NOT EXISTS idx_credits_company ON credits(company_id);
@@ -117,7 +108,6 @@ export interface SeedItem {
   key: string;
   name: string;
   unit: Unit;
-  tint: string;
   priceCents: number;
   image: string;
   /** sold by the head — capture a tail/"ekor" count alongside weight */
@@ -130,14 +120,14 @@ export interface SeedItem {
 // to their emoji + name on the tile. Prices/units marked TODO need confirming.
 export const SEED_ITEMS: SeedItem[] = [
   // Ikan Tilapia: RM25/kg, wholesale break >= 10 kg -> RM23/kg.
-  { key: "tilapia", name: "Ikan Tilapia", unit: "kg", tint: "#d6e4ec", priceCents: 2500, image: "/images/talapia", tracksTail: true, tiers: [{ minQtyMilli: 10000, priceCents: 2300 }] },
-  { key: "ayam", name: "Ayam", unit: "kg", tint: "#f7ddc4", priceCents: 3000, image: "", tracksTail: true },
-  { key: "fresh_milk_500", name: "Fresh Milk 500 ml", unit: "bottle", tint: "#eee9df", priceCents: 0, image: "/images/milk" }, // TODO price
-  { key: "fresh_milk_1l", name: "Fresh Milk 1 L", unit: "bottle", tint: "#e7efd9", priceCents: 680, image: "/images/milk" },
-  { key: "uht_200ml", name: "UHT 200 ml", unit: "pack", tint: "#d8e8ec", priceCents: 200, image: "" },
-  { key: "nangka_box", name: "Nangka (Box)", unit: "box", tint: "#f5ecc9", priceCents: 600, image: "/images/nangka" },
-  { key: "nangka_kg", name: "Nangka (kg)", unit: "kg", tint: "#f3e2bf", priceCents: 400, image: "/images/nangka" },
-  { key: "avocado", name: "Avocado", unit: "kg", tint: "#dde7cf", priceCents: 0, image: "/images/avocado" }, // TODO price
-  { key: "sayur", name: "Sayur", unit: "kg", tint: "#cfe0c4", priceCents: 0, image: "" }, // TODO price
-  { key: "durian_paste", name: "Durian Paste", unit: "kg", tint: "#e6d6a8", priceCents: 4000, image: "/images/durian" },
+  { key: "tilapia", name: "Ikan Tilapia", unit: "kg", priceCents: 2500, image: "/images/talapia", tracksTail: true, tiers: [{ minQtyMilli: 10000, priceCents: 2300 }] },
+  { key: "ayam", name: "Ayam", unit: "kg", priceCents: 3000, image: "", tracksTail: true },
+  { key: "fresh_milk_500", name: "Fresh Milk 500 ml", unit: "bottle", priceCents: 0, image: "/images/milk" }, // TODO price
+  { key: "fresh_milk_1l", name: "Fresh Milk 1 L", unit: "bottle", priceCents: 680, image: "/images/milk" },
+  { key: "uht_200ml", name: "UHT 200 ml", unit: "pack", priceCents: 200, image: "" },
+  { key: "nangka_box", name: "Nangka (Box)", unit: "box", priceCents: 600, image: "/images/nangka" },
+  { key: "nangka_kg", name: "Nangka (kg)", unit: "kg", priceCents: 400, image: "/images/nangka" },
+  { key: "avocado", name: "Avocado", unit: "kg", priceCents: 0, image: "/images/avocado" }, // TODO price
+  { key: "sayur", name: "Sayur", unit: "kg", priceCents: 0, image: "" }, // TODO price
+  { key: "durian_paste", name: "Durian Paste", unit: "kg", priceCents: 4000, image: "/images/durian" },
 ];

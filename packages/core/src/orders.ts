@@ -52,6 +52,7 @@ export function buildOrder(
     throw new PosError("an order needs at least one line");
   }
 
+  let totalCents = 0;
   const lines = input.lines.map((line) => {
     const item = resolve(line);
     if (!item || !item.active) {
@@ -63,25 +64,17 @@ export function buildOrder(
     if (!(line.qtyMilli > 0)) {
       throw new PosError(`qty must be > 0 for ${item.name}`);
     }
-    const { unitCents, amountCents, tier } = priceLine(item, line.qtyMilli);
+    const { unitCents, amountCents } = priceLine(item, line.qtyMilli);
+    totalCents += amountCents;
     return {
       itemId: item.id,
-      name: item.name,
-      image: item.image,
-      unit: item.unit,
-      tint: item.tint,
-      priceCents: unitCents, // effective (post-tier) price, snapshotted
+      priceCents: unitCents, // effective (post-tier) price, recorded on the line
       qtyMilli: line.qtyMilli,
-      amountCents,
       // Tail count is independent of qty; only meaningful for tracksTail items.
       // Requiring entry is a till-side rule (see cart.pay), so stay lenient here.
       tailCount: item.tracksTail ? Math.max(0, Math.round(line.tailCount ?? 0)) : 0,
-      bulkPrice: tier !== null,
-      ...(tier ? { bulkMinQtyMilli: tier.minQtyMilli } : {}),
     };
   });
-
-  const totalCents = lines.reduce((a, l) => a + l.amountCents, 0);
   return {
     companyId: input.companyId ?? 1,
     ts: input.ts ?? Date.now(),

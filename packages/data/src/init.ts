@@ -63,30 +63,82 @@ async function migrateOrdersMethod(db: SqlDriver): Promise<void> {
   await db.run("PRAGMA foreign_keys = ON");
 }
 
+/** True when `table` currently has a column named `column`. */
+async function hasColumn(db: SqlDriver, table: string, column: string): Promise<boolean> {
+  const cols = await db.all(`PRAGMA table_info(${table})`);
+  return cols.some((c) => String(c.name) === column);
+}
+
 /**
- * Repair historical order lines saved before bulk-pricing was snapshotted.
- * Those rows kept their discounted `price_cents` but lost `bulk_price` /
- * `bulk_min_qty_milli` (defaulted to 0/NULL), so reprinted receipts dropped the
- * "(10kg)" tier annotation. Re-derive the applied tier from the item's current
- * tiers: a line was bulk-priced when its stored unit price matches a tier whose
- * threshold its quantity met. Idempotent — only touches not-yet-annotated rows.
+ * Slim `items` down to the current shape: the old `company_id` (items are one
+ * shared catalogue now) and `tint` (derived from the name in the UI) columns
+ * are dropped by rebuilding the table. Idempotent — only runs while a stale
+ * column is present.
  */
-async function backfillBulkPricing(db: SqlDriver): Promise<void> {
-  const tierMatch = `
-    SELECT t.min_qty_milli FROM price_tiers t
-    WHERE t.item_id = order_items.item_id
-      AND order_items.qty_milli >= t.min_qty_milli
-      AND order_items.price_cents = t.price_cents
-    ORDER BY t.min_qty_milli DESC
-    LIMIT 1`;
-  await db.run(
-    `UPDATE order_items
-     SET bulk_price = 1,
-         bulk_min_qty_milli = (${tierMatch})
-     WHERE bulk_min_qty_milli IS NULL
-       AND item_id IS NOT NULL
-       AND (${tierMatch}) IS NOT NULL`,
-  );
+async function migrateItemsSlim(db: SqlDriver): Promise<void> {
+  if (!(await hasColumn(db, "items", "tint")) && !(await hasColumn(db, "items", "company_id"))) {
+    return;
+  }
+  await db.run("PRAGMA foreign_keys = OFF");
+  await db.tx(async () => {
+    await db.run(`
+      CREATE TABLE items_new (
+        id     INTEGER PRIMARY KEY AUTOINCREMENT,
+        key    TEXT    NOT NULL UNIQUE,
+        name   TEXT    NOT NULL,
+        image  TEXT    NOT NULL DEFAULT '',
+        unit   TEXT    NOT NULL DEFAULT 'each',
+        price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
+        active INTEGER NOT NULL DEFAULT 1,
+        tracks_tail INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    await db.run(`
+      INSERT INTO items_new (id, key, name, image, unit, price_cents, active, tracks_tail)
+      SELECT id, key, name, image, unit, price_cents, active, tracks_tail FROM items
+    `);
+    await db.run("DROP TABLE items");
+    await db.run("ALTER TABLE items_new RENAME TO items");
+  });
+  await db.run("PRAGMA foreign_keys = ON");
+}
+
+/**
+ * Slim `order_items` down to sale facts only (item_id, price, qty, tail): the
+ * per-line name/image/unit/tint snapshots and the stored bulk-tier columns are
+ * dropped — display fields now come from joining `items`, and the tier
+ * annotation is re-derived from `price_tiers` at read time. Legacy lines with a
+ * NULL item_id are re-linked by matching their snapshotted name against the
+ * catalogue; lines that still can't be linked are dropped (pre-release data
+ * only). Idempotent — only runs while the old `name` column is present.
+ */
+async function migrateOrderItemsSlim(db: SqlDriver): Promise<void> {
+  if (!(await hasColumn(db, "order_items", "name"))) return;
+  await db.run("PRAGMA foreign_keys = OFF");
+  await db.tx(async () => {
+    await db.run(`
+      CREATE TABLE order_items_new (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id  INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+        item_id   INTEGER NOT NULL REFERENCES items(id),
+        price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
+        qty_milli   INTEGER NOT NULL CHECK (qty_milli > 0),
+        tail_count  INTEGER NOT NULL DEFAULT 0 CHECK (tail_count >= 0)
+      )
+    `);
+    await db.run(`
+      INSERT INTO order_items_new (id, order_id, item_id, price_cents, qty_milli, tail_count)
+      SELECT o.id, o.order_id,
+             COALESCE(o.item_id, (SELECT i.id FROM items i WHERE i.name = o.name LIMIT 1)),
+             o.price_cents, o.qty_milli, COALESCE(o.tail_count, 0)
+      FROM order_items o
+      WHERE COALESCE(o.item_id, (SELECT i.id FROM items i WHERE i.name = o.name LIMIT 1)) IS NOT NULL
+    `);
+    await db.run("DROP TABLE order_items");
+    await db.run("ALTER TABLE order_items_new RENAME TO order_items");
+    await db.run("CREATE INDEX IF NOT EXISTS idx_order_items_oid ON order_items(order_id)");
+  });
+  await db.run("PRAGMA foreign_keys = ON");
 }
 
 /**
@@ -129,12 +181,13 @@ export async function initRepo(db: SqlDriver, opts: InitOptions = {}): Promise<S
 
   // Lightweight migration: CREATE TABLE IF NOT EXISTS won't add new columns to a
   // pre-existing DB, so backfill new columns on older local databases.
-  await ensureColumn(db, "items", "company_id", "INTEGER NOT NULL DEFAULT 1");
   const tracksTailAdded = await ensureColumn(db, "items", "tracks_tail", "INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(db, "orders", "company_id", "INTEGER NOT NULL DEFAULT 1");
-  await ensureColumn(db, "order_items", "bulk_price", "INTEGER NOT NULL DEFAULT 0");
-  await ensureColumn(db, "order_items", "bulk_min_qty_milli", "INTEGER");
   await ensureColumn(db, "order_items", "tail_count", "INTEGER NOT NULL DEFAULT 0");
+  // Table rebuilds: items first — the order_items rebuild re-links legacy lines
+  // by item name, so the slimmed items table must already be in place.
+  await migrateItemsSlim(db);
+  await migrateOrderItemsSlim(db);
   await migrateOrdersMethod(db);
   // Business-day + void columns go on *after* the orders-table rebuild above so
   // a rebuild can never drop them.
@@ -144,7 +197,6 @@ export async function initRepo(db: SqlDriver, opts: InitOptions = {}): Promise<S
   // exists after the ensureColumn above.
   await db.run("CREATE INDEX IF NOT EXISTS idx_orders_bdate ON orders(business_date)");
   await backfillBusinessDates(db);
-  await backfillBulkPricing(db);
 
   // When tracks_tail is first added to an existing DB, the seeded catalogue is
   // already there (so the seed block below won't run). Mark the items that ship
@@ -177,7 +229,6 @@ export async function initRepo(db: SqlDriver, opts: InitOptions = {}): Promise<S
           name: s.name,
           image: s.image,
           unit: s.unit,
-          tint: s.tint,
           priceCents: s.priceCents,
           tracksTail: s.tracksTail ?? false,
         });

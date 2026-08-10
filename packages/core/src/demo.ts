@@ -27,24 +27,18 @@ export function generateDemoOrders(
       const ts = new Date(y, m, d, rnd(8, 18), rnd(0, 59)).getTime();
       const nLines = rnd(1, 4);
       const lines: OrderDraft["lines"] = [];
+      let totalCents = 0;
       for (let k = 0; k < nLines; k++) {
         const item = active[rnd(0, active.length - 1)]!;
         const qtyMilli = item.unit === "kg" ? rnd(1, 6) * 500 : rnd(1, 5) * 1000;
-        const { unitCents, amountCents, tier } = priceLine(item, qtyMilli);
+        const { unitCents, amountCents } = priceLine(item, qtyMilli);
+        totalCents += amountCents;
         lines.push({
           itemId: item.id,
-          name: item.name,
-          image: item.image,
-          unit: item.unit,
-          tint: item.tint,
           priceCents: unitCents,
           qtyMilli,
-          amountCents,
-          bulkPrice: tier !== null,
-          ...(tier ? { bulkMinQtyMilli: tier.minQtyMilli } : {}),
         });
       }
-      const totalCents = lines.reduce((a, l) => a + l.amountCents, 0);
       // Demo sales are settled at the till; Credit needs a real creditor, so skip it.
       const methods = PAYMENT_METHODS.filter((m) => m !== "Credit");
       const method = methods[rnd(0, methods.length - 1)]!;

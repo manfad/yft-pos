@@ -3,8 +3,8 @@ import { effectiveUnitPrice, appliedTier, priceLine } from "./pricing.js";
 import type { PricedItem } from "./types.js";
 
 const talapia: PricedItem = {
-  id: 1, companyId: 1, key: "talapia", name: "Talapia", image: "", unit: "kg",
-  tint: "#000", priceCents: 1800, active: true, tracksTail: false,
+  id: 1, key: "talapia", name: "Talapia", image: "", unit: "kg",
+  priceCents: 1800, active: true, tracksTail: false,
   tiers: [{ id: 1, itemId: 1, minQtyMilli: 30000, priceCents: 1500 }],
 };
 

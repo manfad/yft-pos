@@ -40,12 +40,10 @@ import {
 
 const toItem = (r: typeof items.$inferSelect): Item => ({
   id: r.id,
-  companyId: r.companyId,
   key: r.key,
   name: r.name,
   image: r.image,
   unit: r.unit as Unit,
-  tint: r.tint,
   priceCents: r.priceCents,
   active: r.active,
   tracksTail: r.tracksTail,
@@ -58,20 +56,35 @@ const toTier = (r: typeof priceTiers.$inferSelect): PriceTier => ({
   priceCents: r.priceCents,
 });
 
-const toLine = (r: typeof orderItems.$inferSelect): OrderLine => ({
-  id: r.id,
-  itemId: r.itemId,
-  name: r.name,
-  image: r.image,
-  unit: r.unit as Unit,
-  tint: r.tint,
-  priceCents: r.priceCents,
-  qtyMilli: r.qtyMilli,
-  amountCents: lineAmount(r.priceCents, r.qtyMilli),
-  tailCount: r.tailCount,
-  bulkPrice: r.bulkPrice,
-  ...(r.bulkMinQtyMilli == null ? {} : { bulkMinQtyMilli: r.bulkMinQtyMilli }),
-});
+/**
+ * Hydrate a raw order_items row into a domain line: display fields come from
+ * the joined item (items are only soft-deleted, so it's always there — the
+ * fallbacks just keep a manually-tampered DB from crashing the till), and the
+ * bulk-tier annotation is re-derived: a line was tier-priced when its stored
+ * unit price matches a tier whose quantity threshold the line met.
+ */
+const toLine = (
+  r: typeof orderItems.$inferSelect,
+  item: typeof items.$inferSelect | null,
+  tiers: PriceTier[],
+): OrderLine => {
+  const tier = tiers
+    .filter((t) => t.minQtyMilli <= r.qtyMilli && t.priceCents === r.priceCents)
+    .sort((a, b) => b.minQtyMilli - a.minQtyMilli)[0];
+  return {
+    id: r.id,
+    itemId: r.itemId,
+    name: item?.name ?? `Item #${r.itemId}`,
+    image: item?.image ?? "",
+    unit: (item?.unit ?? "each") as Unit,
+    priceCents: r.priceCents,
+    qtyMilli: r.qtyMilli,
+    amountCents: lineAmount(r.priceCents, r.qtyMilli),
+    tailCount: r.tailCount,
+    bulkPrice: tier != null,
+    ...(tier ? { bulkMinQtyMilli: tier.minQtyMilli } : {}),
+  };
+};
 
 const toCredit = (r: typeof credits.$inferSelect): Credit => ({
   id: r.id,
@@ -128,14 +141,11 @@ export class SqlPosRepo implements PosRepo {
     return list.map((i) => ({ ...i, tiers: byItem.get(i.id) ?? [] }));
   }
 
-  async listItems(includeInactive = false, companyId?: number): Promise<PricedItem[]> {
-    const conds = [];
-    if (!includeInactive) conds.push(eq(items.active, true));
-    if (companyId != null) conds.push(eq(items.companyId, companyId));
+  async listItems(includeInactive = false): Promise<PricedItem[]> {
     const rows = await this.dz
       .select()
       .from(items)
-      .where(and(...conds))
+      .where(includeInactive ? undefined : eq(items.active, true))
       .orderBy(asc(items.id));
     return this.attachTiers(rows.map(toItem));
   }
@@ -157,12 +167,10 @@ export class SqlPosRepo implements PosRepo {
     const [row] = await this.dz
       .insert(items)
       .values({
-        companyId: input.companyId ?? 1,
         key: input.key,
         name: input.name,
         image: input.image ?? "",
         unit: input.unit ?? "each",
-        tint: input.tint ?? "#eee",
         priceCents: input.priceCents,
         tracksTail: input.tracksTail ?? false,
       })
@@ -180,7 +188,6 @@ export class SqlPosRepo implements PosRepo {
         name: patch.name ?? cur.name,
         image: patch.image ?? cur.image,
         unit: patch.unit ?? cur.unit,
-        tint: patch.tint ?? cur.tint,
         priceCents: patch.priceCents ?? cur.priceCents,
         active: patch.active ?? cur.active,
         tracksTail: patch.tracksTail ?? cur.tracksTail,
@@ -230,15 +237,9 @@ export class SqlPosRepo implements PosRepo {
         await this.dz.insert(orderItems).values({
           orderId: o!.id,
           itemId: l.itemId,
-          name: l.name,
-          image: l.image,
-          unit: l.unit,
-          tint: l.tint,
           priceCents: l.priceCents,
           qtyMilli: l.qtyMilli,
           tailCount: l.tailCount ?? 0,
-          bulkPrice: l.bulkPrice ?? false,
-          bulkMinQtyMilli: l.bulkMinQtyMilli ?? null,
         });
       }
       // A credit sale also records who owes it — one outstanding credit per order.
@@ -297,11 +298,22 @@ export class SqlPosRepo implements PosRepo {
 
   private async linesFor(orderId: number): Promise<OrderLine[]> {
     const rows = await this.dz
-      .select()
+      .select({ line: orderItems, item: items })
       .from(orderItems)
+      .leftJoin(items, eq(orderItems.itemId, items.id))
       .where(eq(orderItems.orderId, orderId))
       .orderBy(asc(orderItems.id));
-    return rows.map(toLine);
+    if (rows.length === 0) return [];
+    const itemIds = [...new Set(rows.map((r) => r.line.itemId))];
+    const tierRows = await this.dz
+      .select()
+      .from(priceTiers)
+      .where(inArray(priceTiers.itemId, itemIds));
+    const tiersByItem = new Map<number, PriceTier[]>();
+    for (const t of tierRows) {
+      (tiersByItem.get(t.itemId) ?? tiersByItem.set(t.itemId, []).get(t.itemId)!).push(toTier(t));
+    }
+    return rows.map((r) => toLine(r.line, r.item, tiersByItem.get(r.line.itemId) ?? []));
   }
 
   async getOrder(id: number): Promise<Order | null> {

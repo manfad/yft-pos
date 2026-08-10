@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { aggregateItemSales, fmtMoney, fmtQtySold, type ItemSale, type Order } from "@yf/core";
 import { imageCss } from "../productImage";
+import { tintFromName } from "../tint";
 
 const props = withDefaults(defineProps<{ orders: Order[]; label: string; limit?: number }>(), {
   limit: 4,
@@ -46,7 +47,7 @@ const showAll = ref(false);
               <div
                 class="w-52px h-52px flex-none rounded-16px"
                 :style="{
-                  backgroundColor: s.tint,
+                  backgroundColor: tintFromName(s.name),
                   backgroundImage: imageCss(s.image),
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
@@ -116,7 +117,7 @@ const showAll = ref(false);
           <div
             class="w-48px h-48px flex-none rounded-full"
             :style="{
-              backgroundColor: s.tint,
+              backgroundColor: tintFromName(s.name),
               backgroundImage: imageCss(s.image),
               backgroundSize: 'cover',
               backgroundPosition: 'center',

@@ -37,10 +37,9 @@ export function computeStats(orders: Order[], period: Period): Stats {
 
 /** Per-product roll-up: how much of each item sold and what it earned. */
 export interface ItemSale {
-  itemId: number | null;
+  itemId: number;
   name: string;
   image: string;
-  tint: string;
   unit: Unit;
   qtyMilli: Milli;
   /** total head count ("ekor") sold; 0 for items that don't track tails */
@@ -52,27 +51,24 @@ export interface ItemSale {
 
 /**
  * Aggregate order line items into per-product totals, sorted by quantity sold
- * (descending) — so the first entry is the "top seller". Items are keyed by
- * itemId when present, else by name+unit (covers deleted items).
+ * (descending) — so the first entry is the "top seller". Keyed by itemId.
  */
 export function aggregateItemSales(orders: Order[]): ItemSale[] {
-  const map = new Map<string, ItemSale>();
+  const map = new Map<number, ItemSale>();
   for (const o of orders) {
     if (o.voidedAt != null) continue; // cancelled sales sold nothing
     for (const l of o.items) {
-      const key = l.itemId != null ? `id:${l.itemId}` : `name:${l.name}:${l.unit}`;
-      const cur = map.get(key);
+      const cur = map.get(l.itemId);
       if (cur) {
         cur.qtyMilli += l.qtyMilli;
         cur.tailCount += l.tailCount;
         cur.amountCents += l.amountCents;
         cur.lines += 1;
       } else {
-        map.set(key, {
+        map.set(l.itemId, {
           itemId: l.itemId,
           name: l.name,
           image: l.image,
-          tint: l.tint,
           unit: l.unit,
           qtyMilli: l.qtyMilli,
           tailCount: l.tailCount,

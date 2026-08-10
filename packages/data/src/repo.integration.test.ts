@@ -210,57 +210,75 @@ describe("demo seeding", () => {
   });
 });
 
-describe("bulk-pricing backfill migration", () => {
-  it("re-derives bulk_price/min_qty for legacy rows missing them", async () => {
+describe("slim-schema migration", () => {
+  it("rebuilds legacy items/order_items tables and re-links snapshot lines by name", async () => {
     const SQL = await initSqlJs();
     const db = new SQL.Database();
     const driver = createSqlJsDriver(db as never);
-    const repo = await initRepo(driver, { now: new Date(2026, 5, 19) });
-    const fish = (await repo.getItemByKey("tilapia"))!; // tier: >=10kg -> RM23
-
-    // Simulate a pre-migration order line: discounted price kept, but the bulk
-    // columns left at their backfilled defaults (0 / NULL).
-    await driver.run("INSERT INTO orders (company_id, ts, total_cents, method) VALUES (1, 1000, 25300, 'QR')");
-    const oid = Number(
-      (await driver.all("SELECT id FROM orders ORDER BY id DESC LIMIT 1"))[0]!.id,
+    // A populated pre-slim DB: items with company_id/tint, order_items with the
+    // per-line snapshots, no tail_count yet, and one line whose item link was
+    // lost (NULL item_id) but whose name still matches the catalogue.
+    await driver.run(
+      `CREATE TABLE items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, company_id INTEGER NOT NULL DEFAULT 1,
+        key TEXT NOT NULL UNIQUE, name TEXT NOT NULL, image TEXT NOT NULL DEFAULT '',
+        unit TEXT NOT NULL DEFAULT 'each', tint TEXT NOT NULL DEFAULT '#eee',
+        price_cents INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1,
+        tracks_tail INTEGER NOT NULL DEFAULT 0)`,
     );
     await driver.run(
-      `INSERT INTO order_items
-       (order_id, item_id, name, image, unit, tint, price_cents, qty_milli, bulk_price, bulk_min_qty_milli)
-       VALUES (?, ?, 'Ikan Tilapia', '', 'kg', '#fff', 2300, 11000, 0, NULL)`,
-      [oid, fish.id],
+      "INSERT INTO items (key, name, unit, price_cents, tracks_tail) VALUES ('tilapia','Ikan Tilapia','kg',2500,1)",
+    );
+    await driver.run(
+      `CREATE TABLE order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL,
+        item_id INTEGER, name TEXT NOT NULL, image TEXT NOT NULL DEFAULT '',
+        unit TEXT NOT NULL DEFAULT 'each', tint TEXT NOT NULL DEFAULT '#eee',
+        price_cents INTEGER NOT NULL, qty_milli INTEGER NOT NULL,
+        bulk_price INTEGER NOT NULL DEFAULT 0, bulk_min_qty_milli INTEGER)`,
+    );
+    await driver.run(
+      "INSERT INTO order_items (order_id, item_id, name, price_cents, qty_milli) VALUES (1, 1, 'Ikan Tilapia', 2500, 2000)",
+    );
+    await driver.run(
+      "INSERT INTO order_items (order_id, item_id, name, price_cents, qty_milli) VALUES (1, NULL, 'Ikan Tilapia', 2300, 11000)",
     );
 
-    // Re-run init (idempotent migrations) to apply the backfill.
-    await initRepo(driver, { now: new Date(2026, 5, 19) });
+    await initRepo(driver);
 
-    const order = (await repo.getOrder(oid))!;
-    expect(order.items[0]).toMatchObject({ bulkPrice: true, bulkMinQtyMilli: 10000 });
+    const itemCols = (await driver.all("PRAGMA table_info(items)")).map((c) => String(c.name));
+    expect(itemCols).not.toContain("tint");
+    expect(itemCols).not.toContain("company_id");
+    const lineCols = (await driver.all("PRAGMA table_info(order_items)")).map((c) => String(c.name));
+    expect(lineCols).toEqual(["id", "order_id", "item_id", "price_cents", "qty_milli", "tail_count"]);
+    const lines = await driver.all("SELECT item_id, tail_count FROM order_items ORDER BY id");
+    expect(lines).toHaveLength(2);
+    expect(lines.every((l) => Number(l.item_id) === 1 && Number(l.tail_count) === 0)).toBe(true);
+  });
+});
+
+describe("bulk-tier annotation (derived at read time)", () => {
+  it("marks a line bulk when its price matches a tier whose threshold the qty met", async () => {
+    const repo = await freshRepo();
+    const fish = (await repo.getItemByKey("tilapia"))!; // tier: >=10kg -> RM23
+    const order = await createOrder(repo, {
+      method: "QR", ts: 1000, lines: [{ itemId: fish.id, qtyMilli: 11000 }],
+    });
+    expect((await repo.getOrder(order.id))!.items[0]).toMatchObject({
+      bulkPrice: true,
+      bulkMinQtyMilli: 10000,
+    });
   });
 
-  it("leaves below-threshold (base-price) lines untouched", async () => {
-    const SQL = await initSqlJs();
-    const db = new SQL.Database();
-    const driver = createSqlJsDriver(db as never);
-    const repo = await initRepo(driver, { now: new Date(2026, 5, 19) });
+  it("leaves below-threshold (base-price) lines unannotated", async () => {
+    const repo = await freshRepo();
     const fish = (await repo.getItemByKey("tilapia"))!;
-
-    await driver.run("INSERT INTO orders (company_id, ts, total_cents, method) VALUES (1, 1000, 5000, 'Cash')");
-    const oid = Number(
-      (await driver.all("SELECT id FROM orders ORDER BY id DESC LIMIT 1"))[0]!.id,
-    );
-    await driver.run(
-      `INSERT INTO order_items
-       (order_id, item_id, name, image, unit, tint, price_cents, qty_milli, bulk_price, bulk_min_qty_milli)
-       VALUES (?, ?, 'Ikan Tilapia', '', 'kg', '#fff', 2500, 2000, 0, NULL)`,
-      [oid, fish.id],
-    );
-
-    await initRepo(driver, { now: new Date(2026, 5, 19) });
-
-    const order = (await repo.getOrder(oid))!;
-    expect(order.items[0]!.bulkPrice).toBe(false);
-    expect(order.items[0]!.bulkMinQtyMilli).toBeUndefined();
+    const order = await createOrder(repo, {
+      method: "Cash", ts: 1000, lines: [{ itemId: fish.id, qtyMilli: 2000 }],
+    });
+    const line = (await repo.getOrder(order.id))!.items[0]!;
+    expect(line.bulkPrice).toBe(false);
+    expect(line.bulkMinQtyMilli).toBeUndefined();
   });
 });
 

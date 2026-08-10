@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { appliedTier, fmtMoney, fmtQty, fmtQtyUnit, unitLabel } from "@yf/core";
 import { productImage } from "../productImage";
+import { tintFromName } from "../tint";
 import type { CartLine } from "../stores/cart";
 
 const props = defineProps<{
@@ -47,7 +48,7 @@ const cols = computed(() =>
       <div
         class="cart-image w-46px h-46px flex-none rounded-full flex items-center justify-center text-18px font-800 text-ink/70"
         :style="{
-          backgroundColor: line.item.tint,
+          backgroundColor: tintFromName(line.item.name),
           backgroundImage: img ? `url('${img}')` : undefined,
           backgroundSize: 'cover',
           backgroundPosition: 'center',

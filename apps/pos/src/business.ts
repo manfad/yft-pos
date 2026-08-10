@@ -37,7 +37,7 @@ async function queueDailyEmail(
   auto: boolean,
 ): Promise<DailyReportDelivery> {
   const repo = await getRepo();
-  const catalog = await repo.listItems(true, companyId);
+  const catalog = await repo.listItems(true);
   const credits = await repo.listCredits(companyId, { outstandingOnly: true });
   // A Close Day artifact has its own stable name so an earlier manual export/
   // email cannot suppress the final end-of-day workbook.

@@ -3,13 +3,13 @@ import { buildOrder, PosError } from "./orders.js";
 import type { PricedItem } from "./types.js";
 
 const fish: PricedItem = {
-  id: 1, companyId: 1, key: "talapia", name: "Talapia", image: "", unit: "kg",
-  tint: "#000", priceCents: 1800, active: true, tracksTail: true,
+  id: 1, key: "talapia", name: "Talapia", image: "", unit: "kg",
+  priceCents: 1800, active: true, tracksTail: true,
   tiers: [{ id: 1, itemId: 1, minQtyMilli: 30000, priceCents: 1500 }],
 };
 const rice: PricedItem = {
-  id: 2, companyId: 1, key: "rice", name: "Rice", image: "", unit: "kg",
-  tint: "#000", priceCents: 350, active: true, tracksTail: false, tiers: [],
+  id: 2, key: "rice", name: "Rice", image: "", unit: "kg",
+  priceCents: 350, active: true, tracksTail: false, tiers: [],
 };
 const byId = new Map([[1, fish], [2, rice]]);
 const resolve = (l: { itemId?: number }) => (l.itemId != null ? byId.get(l.itemId) ?? null : null);
@@ -22,8 +22,8 @@ describe("buildOrder", () => {
     );
     // fish 30kg @ RM15 = 45000, rice 2kg @ RM3.50 = 700 -> 45700
     expect(draft.totalCents).toBe(45700);
-    expect(draft.lines[0]).toMatchObject({ priceCents: 1500, amountCents: 45000 });
-    expect(draft.lines[1]).toMatchObject({ priceCents: 350, amountCents: 700 });
+    expect(draft.lines[0]).toMatchObject({ itemId: 1, priceCents: 1500, qtyMilli: 30000 });
+    expect(draft.lines[1]).toMatchObject({ itemId: 2, priceCents: 350, qtyMilli: 2000 });
     expect(draft.ts).toBe(1000);
   });
 

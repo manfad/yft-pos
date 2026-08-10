@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref } from "vue";
 import {
   fmtMoney,
   fmtQtyUnit,
@@ -15,7 +15,6 @@ import { imageCss, productImage } from "../productImage";
 import { getRepo } from "../db";
 import { useCatalog } from "../stores/catalog";
 import { useUi } from "../stores/ui";
-import { currentCompany } from "../place";
 import TopBar from "../components/TopBar.vue";
 import SelectInput from "../components/SelectInput.vue";
 import TextInput from "../components/TextInput.vue";
@@ -68,12 +67,10 @@ function priceFromRM(value: number, label: string): number {
 async function refresh(): Promise<void> {
   const repo = await getRepo();
   unitTypes.value = await repo.listUnitTypes();
-  items.value = await repo.listItems(true, currentCompany.value.id);
+  items.value = await repo.listItems(true);
   await catalog.load(); // keep the till (active-only) in sync
 }
 onMounted(refresh);
-// Items are per-company — reload the list when the company is switched in the nav.
-watch(currentCompany, () => void refresh());
 
 function openAdd(): void {
   editing.value = {
@@ -126,12 +123,10 @@ async function saveEdit(): Promise<void> {
       }));
     if (d.id === 0) {
       const created = await repo.createItem({
-        companyId: currentCompany.value.id,
         key: `${slugify(d.name)}-${Date.now().toString(36)}`,
         name: d.name.trim(),
         unit: d.unit,
         image: d.image,
-        tint: tintFromName(d.name.trim()),
         priceCents,
         tracksTail: d.tracksTail,
       });
@@ -195,7 +190,7 @@ async function saveEdit(): Promise<void> {
                 <div
                   class="w-40px h-40px flex-none rounded-full flex items-center justify-center text-16px font-800 text-ink/70"
                   :style="{
-                    backgroundColor: it.tint,
+                    backgroundColor: tintFromName(it.name),
                     backgroundImage: imageCss(it.image),
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',

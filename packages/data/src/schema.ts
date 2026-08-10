@@ -18,12 +18,10 @@ export const unitTypes = sqliteTable("unit_types", {
 
 export const items = sqliteTable("items", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  companyId: integer("company_id").notNull().default(1),
   key: text("key").notNull().unique(),
   name: text("name").notNull(),
   image: text("image").notNull().default(""),
   unit: text("unit").notNull().default("each"),
-  tint: text("tint").notNull().default("#eee"),
   priceCents: integer("price_cents").notNull(),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   tracksTail: integer("tracks_tail", { mode: "boolean" }).notNull().default(false),
@@ -86,14 +84,8 @@ export const credits = sqliteTable("credits", {
 export const orderItems = sqliteTable("order_items", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   orderId: integer("order_id").notNull(),
-  itemId: integer("item_id"),
-  name: text("name").notNull(),
-  image: text("image").notNull().default(""),
-  unit: text("unit").notNull().default("each"),
-  tint: text("tint").notNull().default("#eee"),
+  itemId: integer("item_id").notNull(),
   priceCents: integer("price_cents").notNull(),
   qtyMilli: integer("qty_milli").notNull(),
   tailCount: integer("tail_count").notNull().default(0),
-  bulkPrice: integer("bulk_price", { mode: "boolean" }).notNull().default(false),
-  bulkMinQtyMilli: integer("bulk_min_qty_milli"),
 });

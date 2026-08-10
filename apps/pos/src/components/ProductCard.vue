@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import type { PricedItem } from "@yf/core";
 import { productImage } from "../productImage";
+import { tintFromName } from "../tint";
 
 const props = defineProps<{ item: PricedItem }>();
 defineEmits<{ add: [] }>();
@@ -30,7 +31,7 @@ const img = computed(() => productImage(props.item.image));
     <div
       v-else
       class="w-full h-full rounded-14px flex items-center justify-center px-6px"
-      :style="{ backgroundColor: item.tint }"
+      :style="{ backgroundColor: tintFromName(item.name) }"
     >
       <span class="text-17px font-800 text-ink leading-tight text-center line-clamp-3">{{ item.name }}</span>
     </div>
