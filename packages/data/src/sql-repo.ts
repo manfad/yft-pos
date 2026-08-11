@@ -14,6 +14,8 @@ import {
   type Order,
   type OrderLine,
   type Unit,
+  INV_SEQ_START,
+  formatInvNo,
   lineAmount,
   localDateStr,
   nextDateStr,
@@ -47,6 +49,7 @@ const toItem = (r: typeof items.$inferSelect): Item => ({
   priceCents: r.priceCents,
   active: r.active,
   tracksTail: r.tracksTail,
+  sortOrder: r.sortOrder,
 });
 
 const toTier = (r: typeof priceTiers.$inferSelect): PriceTier => ({
@@ -86,10 +89,13 @@ const toLine = (
   };
 };
 
-const toCredit = (r: typeof credits.$inferSelect): Credit => ({
+// `invNo` comes from the credited order (credits carry only its id); the
+// fallback matches toOrder's — pre-invoice-number sales display their id.
+const toCredit = (r: typeof credits.$inferSelect, invNo: string | null): Credit => ({
   id: r.id,
   companyId: r.companyId,
   orderId: r.orderId,
+  invNo: invNo ?? String(r.orderId),
   name: r.name,
   amountCents: r.amountCents,
   date: r.date,
@@ -146,7 +152,7 @@ export class SqlPosRepo implements PosRepo {
       .select()
       .from(items)
       .where(includeInactive ? undefined : eq(items.active, true))
-      .orderBy(asc(items.id));
+      .orderBy(asc(items.sortOrder), asc(items.id));
     return this.attachTiers(rows.map(toItem));
   }
 
@@ -175,6 +181,11 @@ export class SqlPosRepo implements PosRepo {
         tracksTail: input.tracksTail ?? false,
       })
       .returning({ id: items.id });
+    // New items land at the end of the arranged catalogue.
+    await this.db.run(
+      "UPDATE items SET sort_order = (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM items) WHERE id = ?",
+      [row!.id],
+    );
     return (await this.getItem(row!.id))!;
   }
 
@@ -200,6 +211,14 @@ export class SqlPosRepo implements PosRepo {
     await this.dz.update(items).set({ active }).where(eq(items.id, id));
   }
 
+  async setItemOrder(orderedIds: number[]): Promise<void> {
+    await this.db.tx(async () => {
+      for (const [index, id] of orderedIds.entries()) {
+        await this.dz.update(items).set({ sortOrder: index + 1 }).where(eq(items.id, id));
+      }
+    });
+  }
+
   async setTiers(itemId: number, tiers: TierInput[]): Promise<void> {
     for (const t of tiers) {
       assertPositiveMilli(t.minQtyMilli, "tier minQtyMilli");
@@ -223,12 +242,23 @@ export class SqlPosRepo implements PosRepo {
       assertPositiveMilli(l.qtyMilli, "line qtyMilli");
     }
     const id = await this.db.tx(async () => {
+      const businessDate = draft.businessDate ?? localDateStr(draft.ts);
+      // The sale takes the next number in its business month: max + 1, so a
+      // voided sale keeps its number and leaves a gap rather than freeing it.
+      // substr(inv_no, 4) drops the fixed 3-char "MM-" prefix — every number is
+      // written by formatInvNo, so the prefix is always exactly that long.
+      const [seqRow] = await this.db.all(
+        `SELECT COALESCE(MAX(CAST(substr(inv_no, 4) AS INTEGER)), ?) + 1 AS seq
+         FROM orders WHERE substr(business_date, 1, 7) = ?`,
+        [INV_SEQ_START - 1, businessDate.slice(0, 7)],
+      );
       const [o] = await this.dz
         .insert(orders)
         .values({
           companyId: draft.companyId ?? 1,
           ts: draft.ts,
-          businessDate: draft.businessDate ?? localDateStr(draft.ts),
+          businessDate,
+          invNo: formatInvNo(businessDate, Number(seqRow!.seq)),
           totalCents: draft.totalCents,
           method: draft.method,
         })
@@ -264,11 +294,12 @@ export class SqlPosRepo implements PosRepo {
     if (companyId != null) conds.push(eq(credits.companyId, companyId));
     if (opts?.outstandingOnly) conds.push(isNull(credits.isClear));
     const rows = await this.dz
-      .select()
+      .select({ credit: credits, invNo: orders.invNo })
       .from(credits)
+      .leftJoin(orders, eq(credits.orderId, orders.id))
       .where(and(...conds))
       .orderBy(desc(credits.date));
-    return rows.map(toCredit);
+    return rows.map((r) => toCredit(r.credit, r.invNo));
   }
 
   async clearCreditsByName(name: string, clearedAt: number, companyId?: number): Promise<void> {
@@ -346,6 +377,10 @@ export class SqlPosRepo implements PosRepo {
       companyId: r.companyId,
       ts: r.ts,
       businessDate: r.businessDate ?? localDateStr(r.ts),
+      // Sales from before invoice numbers shipped are deliberately never
+      // renumbered (their receipts were printed with the order id) — they
+      // keep displaying the id; every sale since is numbered at insert.
+      invNo: r.invNo ?? String(r.id),
       method: r.method,
       totalCents: r.totalCents,
       items: lines,

@@ -13,33 +13,55 @@ import {
 } from "@yf/core";
 
 /** Increment when HQ changes the stable workbook contract. */
-export const DAILY_WORKBOOK_TEMPLATE_VERSION = 2;
+export const DAILY_WORKBOOK_TEMPLATE_VERSION = 3;
 
-// v2 sheet set (mirrors demo-output/hq-daily-4sheet-demo.xlsx):
+// v3 sheet set:
 //   Sales List — one row per sale, amount split into Cash/Credit columns
 //   Today Sales — per-item totals (qty merged with unit) + payment breakdown
-//   Fish Sales — one row per sale containing fish; qty is the ekor count
+//   <one sheet per ekor item> — every active tail-tracking item in the catalogue
+//     gets its own sheet, named after the item, in catalogue order. One row per
+//     sale containing that item; qty is that item's ekor count. Emitted even
+//     with no sales that day so the workbook shape stays stable for HQ.
+//     (v2 had a single hand-rolled "Fish Sales" sheet here.)
 //   Sales Detail — every sale as its own block, voided ones marked
 //   Credit — today's credit sales, then the full outstanding ledger
 export const SALES_LIST_HEADERS = ["#", "Name", "Date", "Inv No", "Pay Type", "Cash", "Credit"] as const;
 export const TODAY_SALES_HEADERS = ["Item", "Unit Price (RM)", "Qty", "Amount (RM)"] as const;
-export const FISH_SALES_HEADERS = ["#", "Inv No", "Pay Type", "Cash", "Credit", "Fish Qty (Ekor)"] as const;
+export const EKOR_SHEET_HEADERS = ["#", "Inv No", "Pay Type", "Cash", "Credit", "Qty (Ekor)"] as const;
 export const CREDIT_HEADERS = ["Date", "Inv No", "Name", "Amount (RM)"] as const;
+
+/** Sheet names Excel refuses, and the length it truncates at. */
+const FORBIDDEN_SHEET_CHARS = /[\\/?*[\]:]/g;
+const SHEET_NAME_MAX = 31;
+
+/** The fixed sheets, so an item named "Credit" cannot shadow one of them. */
+const FIXED_SHEET_NAMES = ["Sales List", "Today Sales", "Sales Detail", "Credit"] as const;
+
+/**
+ * An item name turned into a legal, unique sheet name. `taken` holds the names
+ * already used in the workbook and gains the returned one, so callers just
+ * thread the same set through every item.
+ */
+export function sheetNameFor(itemName: string, taken: Set<string>): string {
+  const cleaned = itemName.replace(FORBIDDEN_SHEET_CHARS, "").trim().slice(0, SHEET_NAME_MAX).trim();
+  const base = cleaned || "Item";
+  let name = base;
+  for (let n = 2; taken.has(name); n += 1) {
+    const suffix = ` ${n}`;
+    name = `${base.slice(0, SHEET_NAME_MAX - suffix.length).trim()}${suffix}`;
+  }
+  taken.add(name);
+  return name;
+}
 
 const validOrders = (orders: Order[]): Order[] =>
   [...orders].filter((order) => order.voidedAt == null).sort((a, b) => a.ts - b.ts);
 
-const isChicken = (name: string): boolean => /\b(ayam|chicken|hen|rooster)\b/i.test(name);
-
-/**
- * Fish head count ("ekor") on an order. The catalogue's only tail-tracking
- * items are fish and chicken, so a non-chicken tail line counts as fish — this
- * survives renamed/deleted items because it reads the line snapshot only.
- */
-const fishEkor = (order: Order): number => {
+/** Head count ("ekor") of one item on an order, summed over its lines. */
+const itemEkor = (order: Order, itemId: number): number => {
   let ekor = 0;
   for (const line of order.items) {
-    if (line.tailCount > 0 && !isChicken(line.name)) ekor += line.tailCount;
+    if (line.itemId === itemId) ekor += line.tailCount;
   }
   return ekor;
 };
@@ -84,7 +106,7 @@ function salesListSheet(orders: Order[]): XLSX.WorkSheet {
       index + 1,
       order.method === "Credit" ? (order.creditorName ?? "") : "",
       order.businessDate,
-      order.id,
+      order.invNo,
       order.method,
       cash,
       credit,
@@ -96,7 +118,7 @@ function salesListSheet(orders: Order[]): XLSX.WorkSheet {
   const voidedRows: (string | number)[][] = voided.map((order) => {
     const [cash, credit] = cashCredit(order);
     const name = order.method === "Credit" ? (order.creditorName ?? "") : "";
-    return ["", name ? `${name} (VOIDED)` : "VOIDED", order.businessDate, order.id, order.method, cash, credit];
+    return ["", name ? `${name} (VOIDED)` : "VOIDED", order.businessDate, order.invNo, order.method, cash, credit];
   });
   const sheet = XLSX.utils.aoa_to_sheet([
     [...SALES_LIST_HEADERS],
@@ -156,16 +178,19 @@ function todaySalesSheet(orders: Order[]): XLSX.WorkSheet {
   return sheet;
 }
 
-/** Sheet 3 — one row per sale containing fish; the qty column is ekor. */
-function fishSalesSheet(orders: Order[]): XLSX.WorkSheet {
-  const sales = validOrders(orders).filter((order) => fishEkor(order) > 0);
+/**
+ * One sheet per tail-tracking item — a sale appears if it carries any line of
+ * that item, matched on `itemId` so renaming the item cannot reclassify it.
+ */
+function ekorSheet(orders: Order[], itemId: number): XLSX.WorkSheet {
+  const sales = validOrders(orders).filter((order) => order.items.some((line) => line.itemId === itemId));
   const rows: (string | number)[][] = sales.map((order, index) => {
     const [cash, credit] = cashCredit(order);
-    return [index + 1, order.id, order.method, cash, credit, fishEkor(order)];
+    return [index + 1, order.invNo, order.method, cash, credit, itemEkor(order, itemId)];
   });
   const totalRow = sales.length + 2;
   const sheet = XLSX.utils.aoa_to_sheet([
-    [...FISH_SALES_HEADERS],
+    [...EKOR_SHEET_HEADERS],
     ...rows,
     ["TOTAL", "", "", 0, 0, 0],
   ]);
@@ -188,7 +213,7 @@ function salesDetailSheet(orders: Order[]): XLSX.WorkSheet {
     const time = new Date(order.ts).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     const voided = order.voidedAt != null;
     rows.push([
-      `Inv #${order.id}${order.creditorName ? ` — ${order.creditorName}` : ""}`,
+      `Inv #${order.invNo}${order.creditorName ? ` — ${order.creditorName}` : ""}`,
       time,
       order.method,
       voided ? "VOIDED" : "",
@@ -220,7 +245,7 @@ function creditSheet(orders: Order[], outstanding: Credit[]): XLSX.WorkSheet {
   rows.push([...CREDIT_HEADERS]);
   const todayFirst = rows.length + 1;
   for (const order of today) {
-    rows.push([order.businessDate, order.id, order.creditorName ?? "", toRM(order.totalCents)]);
+    rows.push([order.businessDate, order.invNo, order.creditorName ?? "", toRM(order.totalCents)]);
   }
   rows.push(["TOTAL", "", "", 0]);
   const todayTotal = rows.length;
@@ -230,7 +255,7 @@ function creditSheet(orders: Order[], outstanding: Credit[]): XLSX.WorkSheet {
   const outFirst = rows.length + 1;
   const sorted = [...outstanding].sort((a, b) => b.date - a.date || b.orderId - a.orderId);
   for (const credit of sorted) {
-    rows.push([localDateStr(credit.date), credit.orderId, credit.name, toRM(credit.amountCents)]);
+    rows.push([localDateStr(credit.date), credit.invNo, credit.name, toRM(credit.amountCents)]);
   }
   rows.push(["TOTAL", "", "", 0]);
   const outTotal = rows.length;
@@ -272,7 +297,7 @@ function creditSheet(orders: Order[], outstanding: Credit[]): XLSX.WorkSheet {
 /** Build the stable, versioned daily workbook used by Export and Close Day. */
 export function buildDailyWorkbook(
   orders: Order[],
-  _catalog: Item[] = [],
+  catalog: Item[] = [],
   outstandingCredits: Credit[] = [],
 ): XLSX.WorkBook {
   const workbook = XLSX.utils.book_new();
@@ -283,7 +308,10 @@ export function buildDailyWorkbook(
   };
   XLSX.utils.book_append_sheet(workbook, salesListSheet(orders), "Sales List");
   XLSX.utils.book_append_sheet(workbook, todaySalesSheet(orders), "Today Sales");
-  XLSX.utils.book_append_sheet(workbook, fishSalesSheet(orders), "Fish Sales");
+  const taken = new Set<string>(FIXED_SHEET_NAMES);
+  for (const item of catalog.filter((candidate) => candidate.active && candidate.tracksTail)) {
+    XLSX.utils.book_append_sheet(workbook, ekorSheet(orders, item.id), sheetNameFor(item.name, taken));
+  }
   XLSX.utils.book_append_sheet(workbook, salesDetailSheet(orders), "Sales Detail");
   XLSX.utils.book_append_sheet(workbook, creditSheet(orders, outstandingCredits), "Credit");
   return workbook;

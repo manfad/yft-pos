@@ -47,14 +47,14 @@ const itemsStr = (o: Order) => `${o.items.length} ${o.items.length === 1 ? "item
           class="flex items-center gap-10px px-18px py-14px bg-tile border-2 border-borderSoft rounded-14px cursor-pointer text-left w-full transition-transform active:translate-y-2px"
           @click="$emit('select', o)"
         >
-          <span class="text-15px font-800 text-faint min-w-44px">#{{ o.id }}</span>
+          <span class="text-15px font-800 text-faint min-w-72px">#{{ o.invNo }}</span>
           <span class="text-16px font-800 text-muted whitespace-nowrap">{{ dateStr(o.ts) }} · {{ timeStr(o.ts) }}</span>
           <span class="flex-1">
             <span class="inline-flex items-center px-10px py-4px rounded-full bg-[#e6edef] border-2 border-[#cfe0e4] text-13px font-800 text-[#3f7c8c] whitespace-nowrap">{{ itemsStr(o) }}</span>
           </span>          <span
             v-if="o.voidedAt != null"
             class="inline-flex items-center px-12px py-5px rounded-full bg-[#f8dcd8] text-14px font-900 tracking-wide text-[#d94b3d]"
-          >VOID</span>
+          >CANCELLED</span>
           <span
             class="inline-flex items-center px-12px py-5px rounded-full text-14px font-800 tracking-wide"
             :style="{ color: PAYMENT_UI[o.method].color, background: PAYMENT_UI[o.method].tint }"

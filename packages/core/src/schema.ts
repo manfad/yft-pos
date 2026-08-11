@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS items (
   unit   TEXT    NOT NULL DEFAULT 'each',
   price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
   active INTEGER NOT NULL DEFAULT 1,
-  tracks_tail INTEGER NOT NULL DEFAULT 0
+  tracks_tail INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS price_tiers (
@@ -37,6 +38,7 @@ CREATE TABLE IF NOT EXISTS orders (
   company_id    INTEGER NOT NULL DEFAULT 1,
   ts            INTEGER NOT NULL,
   business_date TEXT,
+  inv_no        TEXT,
   total_cents   INTEGER NOT NULL CHECK (total_cents >= 0),
   method        TEXT    NOT NULL CHECK (method IN ('Cash','Bank','QR','Credit')),
   voided_at     INTEGER

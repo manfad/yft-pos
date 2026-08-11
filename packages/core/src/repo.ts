@@ -57,6 +57,8 @@ export interface PosRepo {
   createItem(input: ItemInput): Promise<PricedItem>;
   updateItem(id: number, patch: ItemPatch): Promise<PricedItem>;
   setItemActive(id: number, active: boolean): Promise<void>;
+  /** Persist a drag-arranged catalogue order: ids in display order, first = top. */
+  setItemOrder(orderedIds: number[]): Promise<void>;
   /** Replace *all* tiers for an item (the editor sends the full set). */
   setTiers(itemId: number, tiers: TierInput[]): Promise<void>;
 

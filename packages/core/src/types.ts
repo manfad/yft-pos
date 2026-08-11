@@ -36,6 +36,8 @@ export interface Item {
    * kg quantity. Off for everything that isn't an animal/piece.
    */
   tracksTail: boolean;
+  /** Manual display position (drag-to-arrange in admin); ties break by id. */
+  sortOrder: number;
 }
 
 /** A quantity-break: at >= minQtyMilli the unit price drops to priceCents. */
@@ -89,6 +91,14 @@ export interface Order {
    * day — see closeday.ts.
    */
   businessDate: string;
+  /**
+   * The invoice number the customer sees, `MM-<seq>`: the month of
+   * `businessDate` then that month's running sequence from 1000 — `08-1000`,
+   * `08-1001`, …, restarting at `09-1000` in September. Stamped once when the
+   * sale is persisted and never changed: a voided sale keeps its number, so
+   * cancellations leave gaps rather than shifting later invoices.
+   */
+  invNo: string;
   method: PaymentMethod;
   totalCents: Cents;
   items: OrderLine[];
@@ -116,6 +126,8 @@ export interface Credit {
   id: number;
   companyId: number;
   orderId: number;
+  /** Invoice number of the credited order — what the creditor is shown. */
+  invNo: string;
   name: string;
   amountCents: Cents;
   date: number; // epoch ms when the credit was taken

@@ -25,6 +25,7 @@ export const items = sqliteTable("items", {
   priceCents: integer("price_cents").notNull(),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   tracksTail: integer("tracks_tail", { mode: "boolean" }).notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
 });
 
 export const priceTiers = sqliteTable("price_tiers", {
@@ -39,6 +40,7 @@ export const orders = sqliteTable("orders", {
   companyId: integer("company_id").notNull().default(1),
   ts: integer("ts").notNull(),
   businessDate: text("business_date"),
+  invNo: text("inv_no"),
   totalCents: integer("total_cents").notNull(),
   method: text("method", { enum: ["Cash", "Bank", "QR", "Credit"] }).notNull(),
   voidedAt: integer("voided_at"),

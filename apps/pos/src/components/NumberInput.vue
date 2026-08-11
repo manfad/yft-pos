@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import NumpadDialog from "./NumpadDialog.vue";
 
 // Touchscreen number field: looks like an input but opens the on-screen numpad
@@ -25,6 +25,9 @@ const props = withDefaults(
 const emit = defineEmits<{ "update:modelValue": [value: number] }>();
 
 const open = ref(false);
+// `decimals: 2` is only ever used for RM amounts, and RM amounts are typed
+// cents-first on the numpad (3,0,0 -> 3.00).
+const money = computed(() => props.decimals === 2);
 function onConfirm(v: number): void {
   emit("update:modelValue", v);
   open.value = false;
@@ -47,6 +50,7 @@ function onConfirm(v: number): void {
     :open="open"
     :title="title"
     :unit="unit"
+    :money="money"
     :initial="modelValue"
     @confirm="onConfirm"
     @close="open = false"

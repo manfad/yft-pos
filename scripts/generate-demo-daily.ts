@@ -1,9 +1,13 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import type { Order, OrderLine, PaymentMethod, Unit } from "@yf/core";
+import { formatInvNo, INV_SEQ_START, type Order, type OrderLine, type PaymentMethod, type Unit } from "@yf/core";
 import { buildDailyExcelB64 } from "../apps/pos/src/report/daily";
 
 const businessDate = "2026-08-10";
+
+// The orders below are declared in the order they were rung up, so numbering
+// them as they are built matches what the till would have produced.
+let nextSeq = INV_SEQ_START;
 
 function line(input: {
   id: number;
@@ -38,6 +42,7 @@ function order(input: {
     companyId: 1,
     ts: new Date(2026, 7, 10, input.hour, input.minute).getTime(),
     businessDate,
+    invNo: formatInvNo(businessDate, nextSeq++),
     method: input.method,
     totalCents: input.items.reduce((sum, item) => sum + item.amountCents, 0),
     items: input.items,

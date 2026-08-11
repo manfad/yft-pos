@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { buildOrder, PosError } from "./orders.js";
+import { buildOrder, formatInvNo, INV_SEQ_START, PosError } from "./orders.js";
 import type { PricedItem } from "./types.js";
 
 const fish: PricedItem = {
   id: 1, key: "talapia", name: "Talapia", image: "", unit: "kg",
-  priceCents: 1800, active: true, tracksTail: true,
+  priceCents: 1800, active: true, tracksTail: true, sortOrder: 0,
   tiers: [{ id: 1, itemId: 1, minQtyMilli: 30000, priceCents: 1500 }],
 };
 const rice: PricedItem = {
   id: 2, key: "rice", name: "Rice", image: "", unit: "kg",
-  priceCents: 350, active: true, tracksTail: false, tiers: [],
+  priceCents: 350, active: true, tracksTail: false, sortOrder: 0, tiers: [],
 };
 const byId = new Map([[1, fish], [2, rice]]);
 const resolve = (l: { itemId?: number }) => (l.itemId != null ? byId.get(l.itemId) ?? null : null);
@@ -64,5 +64,19 @@ describe("buildOrder", () => {
       resolve,
     );
     expect(draft).toMatchObject({ method: "Credit", creditorName: "Pak Abu" });
+  });
+});
+
+describe("formatInvNo", () => {
+  it("numbers a sale by the month of its business day", () => {
+    expect(formatInvNo("2026-08-10", INV_SEQ_START)).toBe("08-1000");
+    expect(formatInvNo("2026-08-31", 1042)).toBe("08-1042");
+    expect(formatInvNo("2026-09-01", INV_SEQ_START)).toBe("09-1000");
+  });
+
+  it("keeps the month prefix exactly 3 characters, so the sequence stays readable back out", () => {
+    const invNo = formatInvNo("2026-01-05", 1007);
+    expect(invNo.slice(0, 3)).toBe("01-");
+    expect(Number(invNo.slice(3))).toBe(1007);
   });
 });

@@ -193,10 +193,21 @@ export async function initRepo(db: SqlDriver, opts: InitOptions = {}): Promise<S
   // a rebuild can never drop them.
   await ensureColumn(db, "orders", "business_date", "TEXT");
   await ensureColumn(db, "orders", "voided_at", "INTEGER");
+  // Deliberately NOT backfilled: sales made before the update keep showing
+  // their order id (receipts were already printed with it) — MM-1000 numbering
+  // starts with the first sale after this column exists.
+  await ensureColumn(db, "orders", "inv_no", "TEXT");
   // Index created here (not in SCHEMA_SQL) — on an old DB the column only
   // exists after the ensureColumn above.
   await db.run("CREATE INDEX IF NOT EXISTS idx_orders_bdate ON orders(business_date)");
   await backfillBusinessDates(db);
+
+  // sort_order must go on *after* the items rebuild above (migrateItemsSlim
+  // rebuilds items without it, so adding it any earlier would just have it
+  // dropped again). Backfill preserves the current id-based order as the
+  // starting sort order, only on the call that added the column.
+  const sortOrderAdded = await ensureColumn(db, "items", "sort_order", "INTEGER NOT NULL DEFAULT 0");
+  if (sortOrderAdded) await db.run("UPDATE items SET sort_order = id");
 
   // When tracks_tail is first added to an existing DB, the seeded catalogue is
   // already there (so the seed block below won't run). Mark the items that ship

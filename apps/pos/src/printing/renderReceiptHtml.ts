@@ -46,7 +46,7 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Receipt #${r.orderId}</title>
+<title>Receipt #${esc(r.invNo)}</title>
 <style>
   @page { size: ${widthMm}mm auto; margin: 0; }
   * { box-sizing: border-box; }
@@ -149,7 +149,7 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
 </head>
 <body>
   <div class="receipt">
-    <div class="meta">Receipt #${r.orderId}</div>
+    <div class="meta">Receipt #${esc(r.invNo)}</div>
     <div class="store">${esc(r.storeName)}</div>
     <div class="meta">${esc(r.dateText)}</div>
     <div class="hr"></div>

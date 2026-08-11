@@ -14,7 +14,8 @@ export interface ReceiptLine {
 
 export interface Receipt {
   storeName: string;
-  orderId: number;
+  /** The customer-facing invoice number, e.g. "08-1000". */
+  invNo: string;
   dateText: string;
   method: PaymentMethod;
   itemCount: number;
@@ -44,7 +45,7 @@ export function buildReceipt(order: Order, opts: BuildReceiptOptions): Receipt {
   const dateText = `${datePart} · ${timePart}`;
   return {
     storeName: opts.storeName,
-    orderId: order.id,
+    invNo: order.invNo,
     dateText,
     method: order.method,
     itemCount: order.items.length,

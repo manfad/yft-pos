@@ -58,6 +58,7 @@ const dayHourly = computed(() => {
     return { hour, total: 0, count: 0, isNow: isSelectedToday && hour === nowHour };
   });
   for (const o of sales.rangeOrders) {
+    if (o.voidedAt != null) continue; // cancelled sales don't chart
     const h = new Date(o.ts).getHours();
     if (h < DAY_HOUR_START || h > DAY_HOUR_END) continue;
     const b = buckets[h - DAY_HOUR_START]!;
@@ -79,7 +80,7 @@ const weekDaily = computed(() =>
   weekDays.value.map((d) => {
     const s = d.valueOf();
     const e = d.add(1, "day").valueOf();
-    const orders = sales.rangeOrders.filter((o) => o.ts >= s && o.ts < e);
+    const orders = sales.rangeOrders.filter((o) => o.voidedAt == null && o.ts >= s && o.ts < e);
     return {
       total: orders.reduce((a, o) => a + o.totalCents, 0),
       count: orders.length,
@@ -122,6 +123,7 @@ function inspectItem(s: ItemSale): void {
 const dailySums = computed(() => {
   const sums = new Array<number>(daysInMonth.value + 1).fill(0);
   for (const o of sales.monthOrders) {
+    if (o.voidedAt != null) continue; // cancelled sales don't chart
     const d = new Date(o.ts).getDate();
     sums[d] = (sums[d] ?? 0) + o.totalCents;
   }
@@ -130,6 +132,7 @@ const dailySums = computed(() => {
 const dailyCount = computed(() => {
   const c = new Array<number>(daysInMonth.value + 1).fill(0);
   for (const o of sales.monthOrders) {
+    if (o.voidedAt != null) continue;
     const d = new Date(o.ts).getDate();
     c[d] = (c[d] ?? 0) + 1;
   }
@@ -237,14 +240,14 @@ function onVoided(updated: Order): void {
             class="flex items-center gap-10px px-18px py-14px bg-tile border-2 border-borderSoft rounded-14px cursor-pointer text-left w-full transition-transform active:translate-y-2px"
             @click="detail = o"
           >
-            <span class="text-15px font-800 text-faint min-w-44px">#{{ o.id }}</span>
+            <span class="text-15px font-800 text-faint min-w-72px">#{{ o.invNo }}</span>
             <span class="text-17px font-800 text-muted whitespace-nowrap">{{ dateStr(o.ts) }} · {{ timeStr(o.ts) }}</span>
             <span class="flex-1">
               <span class="inline-flex items-center px-10px py-4px rounded-full bg-[#e6edef] border-2 border-[#cfe0e4] text-13px font-800 text-[#3f7c8c] whitespace-nowrap">{{ itemsStr(o) }}</span>
             </span>            <span
               v-if="o.voidedAt != null"
               class="inline-flex items-center px-12px py-5px rounded-full bg-[#f8dcd8] text-14px font-900 tracking-wide text-[#d94b3d]"
-            >VOID</span>
+            >CANCELLED</span>
             <span
               class="inline-flex items-center px-12px py-5px rounded-full text-14px font-800 tracking-wide"
               :style="{ color: PAYMENT_UI[o.method].color, background: PAYMENT_UI[o.method].tint }"
@@ -315,14 +318,14 @@ function onVoided(updated: Order): void {
             class="flex items-center gap-10px px-18px py-14px bg-tile border-2 border-borderSoft rounded-14px cursor-pointer text-left w-full transition-transform active:translate-y-2px"
             @click="detail = o"
           >
-            <span class="text-15px font-800 text-faint min-w-44px">#{{ o.id }}</span>
+            <span class="text-15px font-800 text-faint min-w-72px">#{{ o.invNo }}</span>
             <span class="text-17px font-800 text-muted whitespace-nowrap">{{ dateStr(o.ts) }} · {{ timeStr(o.ts) }}</span>
             <span class="flex-1">
               <span class="inline-flex items-center px-10px py-4px rounded-full bg-[#e6edef] border-2 border-[#cfe0e4] text-13px font-800 text-[#3f7c8c] whitespace-nowrap">{{ itemsStr(o) }}</span>
             </span>            <span
               v-if="o.voidedAt != null"
               class="inline-flex items-center px-12px py-5px rounded-full bg-[#f8dcd8] text-14px font-900 tracking-wide text-[#d94b3d]"
-            >VOID</span>
+            >CANCELLED</span>
             <span
               class="inline-flex items-center px-12px py-5px rounded-full text-14px font-800 tracking-wide"
               :style="{ color: PAYMENT_UI[o.method].color, background: PAYMENT_UI[o.method].tint }"
@@ -393,14 +396,14 @@ function onVoided(updated: Order): void {
             class="flex items-center gap-10px px-18px py-14px bg-tile border-2 border-borderSoft rounded-14px cursor-pointer text-left w-full transition-transform active:translate-y-2px"
             @click="detail = o"
           >
-            <span class="text-15px font-800 text-faint min-w-44px">#{{ o.id }}</span>
+            <span class="text-15px font-800 text-faint min-w-72px">#{{ o.invNo }}</span>
             <span class="text-17px font-800 text-muted whitespace-nowrap">{{ dateStr(o.ts) }} · {{ timeStr(o.ts) }}</span>
             <span class="flex-1">
               <span class="inline-flex items-center px-10px py-4px rounded-full bg-[#e6edef] border-2 border-[#cfe0e4] text-13px font-800 text-[#3f7c8c] whitespace-nowrap">{{ itemsStr(o) }}</span>
             </span>            <span
               v-if="o.voidedAt != null"
               class="inline-flex items-center px-12px py-5px rounded-full bg-[#f8dcd8] text-14px font-900 tracking-wide text-[#d94b3d]"
-            >VOID</span>
+            >CANCELLED</span>
             <span
               class="inline-flex items-center px-12px py-5px rounded-full text-14px font-800 tracking-wide"
               :style="{ color: PAYMENT_UI[o.method].color, background: PAYMENT_UI[o.method].tint }"

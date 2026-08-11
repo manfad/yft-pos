@@ -4,7 +4,7 @@ import { printableWidthMm, renderReceiptHtml } from "./renderReceiptHtml";
 
 const receipt: Receipt = {
   storeName: "Yun Fook Trading",
-  orderId: 1,
+  invNo: "08-1000",
   dateText: "10 Aug 2026 · 09:00 am",
   method: "Cash",
   itemCount: 1,
@@ -27,5 +27,9 @@ describe("receipt print layout", () => {
     expect(html).toContain("@page { size: 80mm auto; margin: 0; }");
     expect(html).toContain("width: 72mm;");
     expect(html).toContain("font-family: Verdana,");
+  });
+
+  it("prints the invoice number, not the internal order id", () => {
+    expect(renderReceiptHtml(receipt)).toContain("Receipt #08-1000");
   });
 });

@@ -178,6 +178,50 @@ Implementation notes:
 
 ---
 
+## 7. First-day QoL batch — ✅ DONE (2026-08-11)
+
+Owner feedback after the first live day:
+
+- **Item drag-to-reorder**: `items.sort_order` column (migrated via `ensureColumn`,
+  backfilled `= id`), `listItems` orders by it, `setItemOrder` repo method. `/item`
+  rows reorder by press-and-hold (300 ms) + drag (vuedraggable); the till grid
+  follows the same order. New items append at the end.
+- **Item soft delete**: Delete button in the `/item` edit dialog (confirmation
+  step) sets `active = 0` via the existing `setItemActive`. Deleted items vanish
+  from `/item` and the till; no restore UI. Past orders/reports unaffected.
+- **Cash change calculator**: the Pay dialog's Cash row gained a "Change" button →
+  calculator view (Received − Total = Change, live; red "Short" when under).
+  PAY CASH settles as a normal Cash sale; the tendered amount is never stored.
+- **Cents-first money entry** (`useCentsEntry` in `apps/pos/src/centsEntry.ts`):
+  money numpads always show 0.00 and digits push in from the cents column
+  (3,0,0 → 3.00; 5,5,0 → 5.50). Applied to the calculator and to
+  `NumpadDialog`'s new `money` mode (used by `NumberInput` when `decimals === 2`,
+  i.e. the RM price fields). Quantity/ekor entry unchanged.
+- **Workbook v3**: the single "Fish Sales" sheet is replaced by one sheet per
+  active `tracksTail` item (named after the item, sanitized/deduped to Excel's
+  31-char limit), matched by `line.itemId` — the fragile chicken-name regex is
+  gone. Zero-sales items still get their sheet so the shape is stable. Behavior
+  change vs v2: an order with a 0 ekor count shows as a 0-qty row instead of
+  being hidden.
+- **Bug fixes**: the three dashboard charts (hourly/weekly/monthly) no longer
+  count voided sales; the red pill in transactions now reads CANCELLED (was
+  VOID), matching the receipt dialog.
+- **Invoice numbers** (`MM-<seq>`, e.g. `08-1000`): assigned at sale time from
+  the order's *business-date* month, starting at 1000 per month (`orders.inv_no`,
+  additive migration, deliberately NO backfill — sales made before the update
+  keep displaying their order id, since those receipts were already printed).
+  Voids keep their number; gaps are never reused. Shown everywhere a receipt
+  number appears — transactions, receipt dialog, printed receipt, credit
+  ledger, and every workbook "Inv No" column. Internal joins/keys still use
+  `orders.id`.
+- **Polish round**: kg weight entry uses the 0.00 push-entry numpad (counts
+  don't); cents-first entry on all RM numpads; item rows tap-to-edit and
+  hold-100ms-to-drag with a ⠿ hint column; Delete (red, full-width) below
+  Save in the item dialog; keypad ⌫ keys red, Clear keys yellow; text-keyboard
+  display uses the display font.
+
+---
+
 ## 6. HQ workbook visual review — ⬜ REVIEW LATER
 
 - Generate a representative demo workbook containing Cash, Credit, fish,

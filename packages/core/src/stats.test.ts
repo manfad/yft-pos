@@ -3,7 +3,7 @@ import { periodRange, computeStats, aggregateItemSales } from "./stats.js";
 import type { Order, OrderLine } from "./types.js";
 
 const mk = (ts: number, method: Order["method"], totalCents: number): Order => ({
-  id: ts, companyId: 1, ts, businessDate: "2026-06-19", method, totalCents, items: [], voidedAt: null,
+  id: ts, companyId: 1, ts, businessDate: "2026-06-19", invNo: "06-1000", method, totalCents, items: [], voidedAt: null,
 });
 
 const line = (over: Partial<OrderLine>): OrderLine => ({

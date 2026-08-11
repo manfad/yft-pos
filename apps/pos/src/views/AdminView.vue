@@ -11,6 +11,7 @@ import {
   type UnitType,
   type Unit,
 } from "@yf/core";
+import draggable from "vuedraggable";
 import { imageCss, productImage } from "../productImage";
 import { getRepo } from "../db";
 import { useCatalog } from "../stores/catalog";
@@ -65,10 +66,30 @@ function priceFromRM(value: number, label: string): number {
 async function refresh(): Promise<void> {
   const repo = await getRepo();
   unitTypes.value = await repo.listUnitTypes();
-  items.value = await repo.listItems(true);
+  // Active only — soft-deleted (active = 0) items are hidden here and on the till.
+  items.value = await repo.listItems();
   await catalog.load(); // keep the till (active-only) in sync
 }
 onMounted(refresh);
+
+// Hold a row ~100ms to drag it; a quick tap opens the editor instead. The
+// `dragging` flag swallows the click that can fire on the row right after a
+// drop, so finishing a drag never pops the edit dialog.
+const dragging = ref(false);
+
+function onRowTap(it: PricedItem): void {
+  if (dragging.value) return;
+  openEdit(it);
+}
+
+// Persist the new order after a drag-to-reorder drop; the till grid follows
+// the same sortOrder, so refresh its catalog too.
+async function onReorder(): Promise<void> {
+  const repo = await getRepo();
+  await repo.setItemOrder(items.value.map((i) => i.id));
+  await catalog.load();
+  setTimeout(() => (dragging.value = false), 150);
+}
 
 function openAdd(): void {
   editing.value = {
@@ -148,6 +169,21 @@ async function saveEdit(): Promise<void> {
   }
 }
 
+// Soft delete: items are never removed from the DB (order lines join on item id),
+// they just go inactive — which hides them from the till and this list for good.
+const confirmingDelete = ref(false);
+
+async function doDelete(): Promise<void> {
+  const d = editing.value;
+  if (!d || d.id === 0) return;
+  const repo = await getRepo();
+  await repo.setItemActive(d.id, false);
+  confirmingDelete.value = false;
+  editing.value = null;
+  await refresh();
+  ui.showToast("Item deleted");
+}
+
 </script>
 
 <template>
@@ -166,6 +202,7 @@ async function saveEdit(): Promise<void> {
           <table class="w-full border-collapse">
         <thead>
           <tr class="text-left text-13px font-800 text-muted uppercase tracking-wide">
+            <th class="p-12px bg-panel sticky top-0 z-1 w-44px"></th>
             <th class="p-12px bg-panel sticky top-0 z-1">Item</th>
             <th class="p-12px bg-panel sticky top-0 z-1">Unit</th>
             <th class="p-12px bg-panel sticky top-0 z-1 text-right">Price</th>
@@ -173,13 +210,24 @@ async function saveEdit(): Promise<void> {
             <th class="p-12px bg-panel sticky top-0 z-1 text-right">Actions</th>
           </tr>
         </thead>
-        <tbody>
-          <tr
-            v-for="it in items"
-            :key="it.id"
-            class="border-t-2 border-borderSoft"
-            :class="{ 'opacity-50': !it.active }"
-          >
+        <draggable
+          v-model="items"
+          tag="tbody"
+          item-key="id"
+          :delay="100"
+          :delay-on-touch-only="false"
+          :animation="150"
+          ghost-class="drag-ghost"
+          @start="dragging = true"
+          @end="onReorder"
+        >
+          <template #item="{ element: it }">
+            <tr
+              :key="it.id"
+              class="border-t-2 border-borderSoft cursor-pointer select-none"
+              @click="onRowTap(it)"
+            >
+            <td class="p-12px text-center text-18px text-faint">⠿</td>
             <td class="p-12px">
               <div class="flex items-center gap-12px">
                 <div
@@ -222,8 +270,9 @@ async function saveEdit(): Promise<void> {
                 <button class="pill-btn h-36px px-14px text-14px" @click="openEdit(it)">Edit</button>
               </div>
             </td>
-          </tr>
-        </tbody>
+            </tr>
+          </template>
+        </draggable>
           </table>
         </div>
       </div>
@@ -350,8 +399,34 @@ async function saveEdit(): Promise<void> {
       </div>
 
       <div class="flex gap-12px mt-22px">
-        <button class="pill-btn flex-1 h-54px text-18px" @click="editing = null">Cancel</button>
+        <button class="pill-btn flex-1 h-54px text-18px bg-white!" @click="editing = null">Cancel</button>
         <button class="btn-pay flex-1 h-54px text-20px" @click="saveEdit">Save</button>
+      </div>
+      <button
+        v-if="editing.id !== 0"
+        class="w-full h-50px mt-12px rounded-full border-none bg-[#d94b3d] text-16px font-800 text-white cursor-pointer press"
+        @click="confirmingDelete = true"
+      >Delete</button>
+    </div>
+  </div>
+
+  <!-- delete confirmation -->
+  <div
+    v-if="confirmingDelete && editing"
+    class="fixed inset-0 bg-[rgba(44,38,32,.45)] flex items-center justify-center p-24px z-80"
+    @click.self="confirmingDelete = false"
+  >
+    <div class="w-full max-w-420px bg-cream border-2 border-border rounded-22px shadow-[0_24px_60px_rgba(0,0,0,.3)] p-26px">
+      <div class="text-22px font-800 mb-10px">Delete {{ editing.name }}?</div>
+      <div class="text-15px font-700 text-muted mb-22px">
+        It will disappear from the till and this list. Past sales and reports keep it.
+      </div>
+      <div class="flex gap-12px">
+        <button class="pill-btn flex-1 h-54px text-18px" @click="confirmingDelete = false">Cancel</button>
+        <button
+          class="flex-1 h-54px rounded-full border-none bg-[#d94b3d] text-18px font-800 text-white cursor-pointer press"
+          @click="doDelete"
+        >Delete</button>
       </div>
     </div>
   </div>
@@ -364,3 +439,11 @@ async function saveEdit(): Promise<void> {
   />
 
 </template>
+
+<style scoped>
+/* Applied by SortableJS to the row being dragged. */
+.drag-ghost {
+  opacity: 0.4;
+  background-color: #f8f1e4;
+}
+</style>

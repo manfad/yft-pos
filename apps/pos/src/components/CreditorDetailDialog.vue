@@ -109,7 +109,7 @@ const fmtDay = (ts: number): string => dayjs(ts).format("DD MMM · h:mm a");
             >
               <!-- click the receipt body to view its detail -->
               <div class="flex-1 min-w-0 flex items-center gap-8px cursor-pointer" @click="$emit('inspect', c.orderId)">
-                <span class="text-13px font-800 text-faint flex-none">#{{ c.orderId }}</span>
+                <span class="text-13px font-800 text-faint flex-none">#{{ c.invNo }}</span>
                 <span class="text-12px font-700 text-muted truncate">{{ fmtDay(c.date) }}</span>
                 <span class="text-14px" title="View receipt">🔍</span>
               </div>

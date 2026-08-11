@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import initSqlJs from "sql.js";
-import { createOrder, computeStats, periodRange } from "@yf/core";
+import { createOrder, computeStats, periodRange, type Order } from "@yf/core";
 import { createSqlJsDriver, initRepo, SqlPosRepo } from "./index.js";
 
 // End-to-end through real SQLite (sql.js in node): schema, seed, tiers, orders.
@@ -165,6 +165,20 @@ describe("SqlPosRepo over sql.js", () => {
     expect((await repo.listItems(true)).some((i) => i.key === "lime")).toBe(true);
   });
 
+  it("setItemOrder reorders the catalogue, and new items land last", async () => {
+    const a = await repo.createItem({ key: "order-a", name: "A", priceCents: 100 });
+    const b = await repo.createItem({ key: "order-b", name: "B", priceCents: 100 });
+    const c = await repo.createItem({ key: "order-c", name: "C", priceCents: 100 });
+
+    await repo.setItemOrder([c.id, b.id, a.id]);
+    const reordered = (await repo.listItems()).filter((i) => [a.id, b.id, c.id].includes(i.id));
+    expect(reordered.map((i) => i.id)).toEqual([c.id, b.id, a.id]);
+
+    const d = await repo.createItem({ key: "order-d", name: "D", priceCents: 100 });
+    const withD = (await repo.listItems()).filter((i) => [a.id, b.id, c.id, d.id].includes(i.id));
+    expect(withD.map((i) => i.id)).toEqual([c.id, b.id, a.id, d.id]);
+  });
+
   it("editing tiers replaces the whole set", async () => {
     const fish = (await repo.getItemByKey("tilapia"))!;
     await repo.setTiers(fish.id, [
@@ -279,6 +293,102 @@ describe("bulk-tier annotation (derived at read time)", () => {
     const line = (await repo.getOrder(order.id))!.items[0]!;
     expect(line.bulkPrice).toBe(false);
     expect(line.bulkMinQtyMilli).toBeUndefined();
+  });
+});
+
+describe("invoice numbers", () => {
+  let repo: SqlPosRepo;
+  beforeEach(async () => {
+    repo = await freshRepo();
+  });
+
+  async function sell(businessDate: string, ts: number): Promise<Order> {
+    const fish = (await repo.getItemByKey("tilapia"))!;
+    return createOrder(repo, {
+      method: "Cash",
+      ts,
+      businessDate,
+      lines: [{ itemId: fish.id, qtyMilli: 1000, tailCount: 1 }],
+    });
+  }
+
+  it("runs from MM-1000 within a business month and restarts the next month", async () => {
+    expect((await sell("2026-08-10", 1000)).invNo).toBe("08-1000");
+    expect((await sell("2026-08-10", 2000)).invNo).toBe("08-1001");
+    expect((await sell("2026-08-31", 3000)).invNo).toBe("08-1002");
+    // September numbers itself from scratch ...
+    expect((await sell("2026-09-01", 4000)).invNo).toBe("09-1000");
+    expect((await sell("2026-09-02", 5000)).invNo).toBe("09-1001");
+    // ... and a late August sale carries on where August left off.
+    expect((await sell("2026-08-12", 6000)).invNo).toBe("08-1003");
+  });
+
+  it("stamps the number once — reads, and a void, never change it", async () => {
+    const order = await sell("2026-08-10", 1000);
+    expect((await repo.getOrder(order.id))!.invNo).toBe("08-1000");
+
+    const voided = await sell("2026-08-10", 2000);
+    expect(voided.invNo).toBe("08-1001");
+    await repo.voidOrder(voided.id, Date.now());
+    expect((await repo.getOrder(voided.id))!.invNo).toBe("08-1001");
+
+    // The cancelled number is spent: the next sale takes max + 1, leaving a gap.
+    expect((await sell("2026-08-10", 3000)).invNo).toBe("08-1002");
+  });
+
+  it("puts the credited order's number on its credit row", async () => {
+    const fish = (await repo.getItemByKey("tilapia"))!;
+    const order = await createOrder(repo, {
+      method: "Credit",
+      creditorName: "Pak Abu",
+      ts: 1000,
+      businessDate: "2026-08-10",
+      lines: [{ itemId: fish.id, qtyMilli: 1000, tailCount: 1 }],
+    });
+    const [credit] = await repo.listCredits(1, { outstandingOnly: true });
+    expect(credit).toMatchObject({ orderId: order.id, invNo: order.invNo });
+  });
+
+  it("leaves pre-existing orders unnumbered — MM-1000 starts with the first new sale", async () => {
+    const SQL = await initSqlJs();
+    const db = new SQL.Database();
+    const driver = createSqlJsDriver(db as never);
+    // A pre-inv_no database: business dates already stamped and the current
+    // method CHECK, so nothing rebuilds the table before inv_no is added.
+    await driver.run(
+      `CREATE TABLE orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, company_id INTEGER NOT NULL DEFAULT 1,
+        ts INTEGER NOT NULL, business_date TEXT,
+        total_cents INTEGER NOT NULL CHECK (total_cents >= 0),
+        method TEXT NOT NULL CHECK (method IN ('Cash','Bank','QR','Credit')),
+        voided_at INTEGER)`,
+    );
+    const existing = ["2026-08-09", "2026-09-02", "2026-08-10"];
+    for (const [index, businessDate] of existing.entries()) {
+      await driver.run(
+        "INSERT INTO orders (ts, business_date, total_cents, method) VALUES (?, ?, ?, 'Cash')",
+        [1000 + index, businessDate, 2500],
+      );
+    }
+
+    const repo = await initRepo(driver);
+
+    // Sales from before the update are never renumbered (receipts were already
+    // printed with the order id) — they display the id and stay NULL in the DB.
+    const rows = await driver.all("SELECT inv_no FROM orders ORDER BY id");
+    expect(rows.map((r) => r.inv_no)).toEqual([null, null, null]);
+    expect((await repo.getOrder(1))!.invNo).toBe("1");
+
+    // The first sale after the update still opens its month at 1000; legacy
+    // NULL rows in the same month don't disturb the sequence.
+    const fish = (await repo.getItemByKey("tilapia"))!;
+    const order = await createOrder(repo, {
+      method: "Cash",
+      ts: 9000,
+      businessDate: "2026-08-11",
+      lines: [{ itemId: fish.id, qtyMilli: 1000, tailCount: 1 }],
+    });
+    expect(order.invNo).toBe("08-1000");
   });
 });
 

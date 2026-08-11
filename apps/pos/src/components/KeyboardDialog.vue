@@ -65,7 +65,7 @@ function rowIndent(ri: number): string {
       <div class="px-24px pt-22px pb-18px border-b-2 border-borderSoft flex-none">
         <div class="text-15px font-800 text-muted uppercase tracking-wider">{{ title }}</div>
         <div class="mt-8px flex items-center bg-[#f4ecdc] rounded-16px px-20px py-14px min-h-66px">
-          <span class="text-30px font-800 text-ink break-all leading-tight">{{ entry }}</span>
+          <span class="font-display text-30px font-700 text-ink break-all leading-tight">{{ entry }}</span>
           <span class="w-2px h-32px bg-ink/40 ml-2px animate-pulse" />
         </div>
       </div>
@@ -101,11 +101,11 @@ function rowIndent(ri: number): string {
               @click="caps = !caps"
             >⇧ Caps</button>
             <button
-              class="flex-1 h-52px rounded-12px border-2 border-border bg-white text-18px font-800 text-muted cursor-pointer press"
+              class="flex-1 h-52px rounded-12px border-2 border-border bg-tile text-20px font-800 text-ink cursor-pointer press"
               @click="entry += ' '"
             >space</button>
             <button
-              class="w-120px h-52px rounded-12px border-2 border-border bg-tile text-24px font-800 text-ink cursor-pointer press"
+              class="w-120px h-52px rounded-12px border-2 border-[#d94b3d] bg-[#d94b3d] text-24px font-800 text-white cursor-pointer press"
               @click="backspace"
             >⌫</button>
           </div>
@@ -115,7 +115,7 @@ function rowIndent(ri: number): string {
       <!-- actions (pinned, always visible) -->
       <div class="px-16px py-16px grid grid-cols-3 gap-12px flex-none border-t-2 border-borderSoft bg-surface rounded-b-26px">
         <button
-          class="h-56px rounded-16px border-2 border-border bg-white text-18px font-800 text-muted cursor-pointer press"
+          class="h-56px rounded-16px border-2 border-[#e0a92e] bg-[#f5c542] text-18px font-800 text-ink cursor-pointer press"
           @click="entry = ''"
         >Clear</button>
         <button

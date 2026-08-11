@@ -213,6 +213,7 @@ async function confirm(method: PaymentMethod): Promise<void> {
     :title="`${numpadLine?.item.name ?? ''} — ${numpadMode === 'tail' ? 'Ekor' : 'quantity'}`"
     :unit="numpadMode === 'tail' ? 'ekor' : unitLabel(numpadLine?.item.unit ?? 'each')"
     :initial="numpadLine ? (numpadMode === 'tail' ? numpadLine.tailCount : numpadLine.qtyMilli / 1000) : 0"
+    :money="numpadMode !== 'tail' && numpadLine?.item.unit === 'kg'"
     @confirm="confirmQty"
     @close="numpadUid = null"
   />

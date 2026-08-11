@@ -13,6 +13,19 @@ export class PosError extends Error {
   }
 }
 
+/** The sequence every month's invoice numbering starts from. */
+export const INV_SEQ_START = 1000;
+
+/**
+ * The invoice number for a sale on `businessDate` (YYYY-MM-DD) with the month's
+ * sequence `seq`, e.g. ("2026-08-10", 1000) -> "08-1000". The month prefix is
+ * always the same 3 characters ("MM-"), which is what lets the sequence be read
+ * back out of a stored number.
+ */
+export function formatInvNo(businessDate: string, seq: number): string {
+  return `${businessDate.slice(5, 7)}-${seq}`;
+}
+
 export interface OrderLineInput {
   itemId?: number;
   key?: string;

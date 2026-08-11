@@ -37,7 +37,7 @@ async function doVoid(): Promise<void> {
   if (!o) return;
   const repo = await getRepo();
   await repo.voidOrder(o.id, Date.now());
-  ui.showToast(`Sale #${o.id} cancelled`);
+  ui.showToast(`Sale #${o.invNo} cancelled`);
   const updated = await repo.getOrder(o.id);
   emit("voided", updated ?? o);
 }
@@ -80,7 +80,7 @@ const whenStr = computed(() => {
       <div class="flex items-center justify-between px-24px py-22px border-b-2 border-borderSoft">
         <div>
           <div class="text-23px font-800">
-            Receipt #{{ order.id }}
+            Receipt #{{ order.invNo }}
             <span
               v-if="order.voidedAt != null"
               class="inline-flex items-center px-12px py-4px rounded-full bg-[#f8dcd8] border-2 border-[#d94b3d] text-14px font-900 text-[#d94b3d] align-middle ml-6px"
@@ -146,7 +146,7 @@ const whenStr = computed(() => {
 
   <PinDialog
     :open="pinOpen"
-    :title="`Cancel sale #${order?.id} · ${fmtMoney(order?.totalCents ?? 0)} — enter PIN`"
+    :title="`Cancel sale #${order?.invNo} · ${fmtMoney(order?.totalCents ?? 0)} — enter PIN`"
     @ok="doVoid"
     @close="pinOpen = false"
   />
