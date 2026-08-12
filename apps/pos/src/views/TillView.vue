@@ -79,6 +79,15 @@ function selectLine(uid: number): void {
   adjustSheetOpen.value = true;
 }
 
+// +/- steppers (adjust sheet and per-line): surface the popup when the cart
+// clamps an increase at the remaining stock.
+function adjustQty(deltaUnits: number): void {
+  if (cart.adjust(deltaUnits)) stockAlertName.value = cart.active?.item.name ?? null;
+}
+function stepLine(uid: number, deltaUnits: number, name: string): void {
+  if (cart.step(uid, deltaUnits)) stockAlertName.value = name;
+}
+
 // numpad: tap any quantity (or tail count) to type it directly (touchscreen-friendly)
 const numpadUid = ref<number | null>(null);
 const numpadMode = ref<"qty" | "tail">("qty");
@@ -167,7 +176,7 @@ async function confirm(method: PaymentMethod): Promise<void> {
         :open="adjustSheetOpen"
         :line="active"
         @close="adjustSheetOpen = false"
-        @adjust-qty="cart.adjust"
+        @adjust-qty="adjustQty"
         @edit-qty="openNumpad()"
         @adjust-tail="cart.adjustTail"
         @edit-tail="openNumpad(undefined, 'tail')"
@@ -209,7 +218,7 @@ async function confirm(method: PaymentMethod): Promise<void> {
           :amount-cents="cart.amountOf(line)"
           :has-tail="hasTail"
           @select="selectLine(line.uid)"
-          @step="(d) => cart.step(line.uid, d)"
+          @step="(d) => stepLine(line.uid, d, line.item.name)"
           @edit="openNumpad(line.uid)"
           @step-tail="(d) => cart.stepTail(line.uid, d)"
           @edit-tail="openNumpad(line.uid, 'tail')"
@@ -249,7 +258,6 @@ async function confirm(method: PaymentMethod): Promise<void> {
     @click.self="stockAlertName = null"
   >
     <div class="w-full max-w-400px bg-cream border-2 border-border rounded-22px shadow-[0_24px_60px_rgba(0,0,0,.3)] p-26px text-center">
-      <div class="text-40px mb-8px">📦</div>
       <div class="text-21px font-800 mb-6px">{{ stockAlertName }} is out of stock</div>
       <div class="text-15px font-700 text-muted mb-20px">Please add more stock in Items.</div>
       <button class="btn-pay w-full h-54px text-18px" @click="stockAlertName = null">OK</button>

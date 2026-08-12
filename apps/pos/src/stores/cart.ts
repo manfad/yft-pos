@@ -74,18 +74,26 @@ export const useCart = defineStore("cart", () => {
   }
 
   /** Adjust the active line by `deltaUnits` (e.g. 0.5, 1, 10, -1). */
-  function adjust(deltaUnits: number): void {
+  /** Returns true when the increase was cut short by the stock cap. */
+  function adjust(deltaUnits: number): boolean {
     const l = active.value;
-    if (!l) return;
-    l.qtyMilli = capQty(l.item, Math.max(0, l.qtyMilli + Math.round(deltaUnits * 1000)));
+    if (!l) return false;
+    const want = Math.max(0, l.qtyMilli + Math.round(deltaUnits * 1000));
+    l.qtyMilli = capQty(l.item, want);
+    return l.qtyMilli < want;
   }
 
-  /** Step a specific line (used by the per-line +/- buttons), making it active. */
-  function step(uid: number, deltaUnits: number): void {
+  /**
+   * Step a specific line (used by the per-line +/- buttons), making it active.
+   * Returns true when the increase was cut short by the stock cap.
+   */
+  function step(uid: number, deltaUnits: number): boolean {
     const l = lines.value.find((x) => x.uid === uid);
-    if (!l) return;
+    if (!l) return false;
     activeUid.value = uid;
-    l.qtyMilli = capQty(l.item, Math.max(0, l.qtyMilli + Math.round(deltaUnits * 1000)));
+    const want = Math.max(0, l.qtyMilli + Math.round(deltaUnits * 1000));
+    l.qtyMilli = capQty(l.item, want);
+    return l.qtyMilli < want;
   }
 
   /** Set a line's quantity to an absolute value in units (from the numpad). */
