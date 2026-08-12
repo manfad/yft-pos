@@ -73,6 +73,7 @@ const item = (partial: Partial<Item> & Pick<Item, "id" | "name">): Item => ({
   priceCents: partial.priceCents ?? 1000,
   active: partial.active ?? true,
   tracksTail: partial.tracksTail ?? false,
+  stockMilli: partial.stockMilli ?? null,
   sortOrder: partial.sortOrder ?? partial.id,
 });
 

@@ -5,6 +5,7 @@ import {
   effectiveUnitPrice,
   appliedTier,
   lineAmount,
+  stockLeftMilli,
   type Order,
   type PaymentMethod,
   type PricedItem,
@@ -40,7 +41,13 @@ export const useCart = defineStore("cart", () => {
 
   const totalCents = computed(() => lines.value.reduce((a, l) => a + amountOf(l), 0));
 
+  // Stock-tracked items can never be carted beyond what's left on the shelf.
+  // (kg/untracked items pass through: stockLeftMilli is Infinity for them.)
+  const capQty = (item: PricedItem, qtyMilli: number): number =>
+    Math.min(qtyMilli, stockLeftMilli(item));
+
   function add(item: PricedItem): void {
+    if (stockLeftMilli(item) <= 0) return; // sold out — the till shows the popup
     const ex = lines.value.find((l) => l.item.id === item.id);
     // For Ekor items, tapping the card counts heads (+1 ekor) rather than weight,
     // so a cashier can tally "6 fish" by tapping six times. Weight must be entered
@@ -57,11 +64,11 @@ export const useCart = defineStore("cart", () => {
       return;
     }
     if (ex) {
-      ex.qtyMilli += 1000;
+      ex.qtyMilli = capQty(item, ex.qtyMilli + 1000);
       activeUid.value = ex.uid;
     } else {
       const uid = nextUid++;
-      lines.value.push({ uid, item, qtyMilli: 1000, tailCount: 0 });
+      lines.value.push({ uid, item, qtyMilli: capQty(item, 1000), tailCount: 0 });
       activeUid.value = uid;
     }
   }
@@ -70,7 +77,7 @@ export const useCart = defineStore("cart", () => {
   function adjust(deltaUnits: number): void {
     const l = active.value;
     if (!l) return;
-    l.qtyMilli = Math.max(0, l.qtyMilli + Math.round(deltaUnits * 1000));
+    l.qtyMilli = capQty(l.item, Math.max(0, l.qtyMilli + Math.round(deltaUnits * 1000)));
   }
 
   /** Step a specific line (used by the per-line +/- buttons), making it active. */
@@ -78,7 +85,7 @@ export const useCart = defineStore("cart", () => {
     const l = lines.value.find((x) => x.uid === uid);
     if (!l) return;
     activeUid.value = uid;
-    l.qtyMilli = Math.max(0, l.qtyMilli + Math.round(deltaUnits * 1000));
+    l.qtyMilli = capQty(l.item, Math.max(0, l.qtyMilli + Math.round(deltaUnits * 1000)));
   }
 
   /** Set a line's quantity to an absolute value in units (from the numpad). */
@@ -86,7 +93,7 @@ export const useCart = defineStore("cart", () => {
     const l = lines.value.find((x) => x.uid === uid);
     if (!l) return;
     activeUid.value = uid;
-    l.qtyMilli = Math.max(0, Math.round(units * 1000));
+    l.qtyMilli = capQty(l.item, Math.max(0, Math.round(units * 1000)));
   }
 
   // --- tail ("ekor") count — a whole number, fully independent of qtyMilli ---

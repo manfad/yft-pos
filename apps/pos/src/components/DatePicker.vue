@@ -12,7 +12,7 @@ const props = withDefaults(defineProps<{ modelValue: string; max?: string }>(), 
 const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 
 const FMT = "YYYY-MM-DD";
-const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const selected = computed(() => dayjs(props.modelValue));
 const maxMs = computed(() => dayjs(props.max).endOf("day").valueOf());

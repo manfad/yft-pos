@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { fmtMoney, fmtQtyUnit, type Order, type Unit } from "@yf/core";
 import dayjs from "dayjs";
 import TopBar from "../components/TopBar.vue";
@@ -7,7 +8,7 @@ import CreditsPanel from "../components/CreditsPanel.vue";
 import SettingsDialog from "../components/SettingsDialog.vue";
 import { getRepo } from "../db";
 import { currentCompany } from "../place";
-import { from, setToday } from "../salesDate";
+import { from, setCurrentDay, setDay } from "../salesDate";
 
 // Per-item sales for the date chosen in the top nav (shared `from`): the selected
 // day, and that month up to and including the selected day (month-to-date).
@@ -25,10 +26,16 @@ async function loadReport(): Promise<void> {
     currentCompany.value.id,
   );
 }
-onMounted(loadReport);
-// The report's date is transient: reset to today on leave so it never carries a
-// stale date back to the dashboard (avoids picking the wrong day by accident).
-onUnmounted(setToday);
+// The shared date is transient between pages: entering the report starts from
+// the live business day, never a date left behind by the dashboard. Close Day is
+// the exception — it lands here on the just-closed day via ?date=.
+const route = useRoute();
+onMounted(() => {
+  const q = route.query.date;
+  if (typeof q === "string" && /^\d{4}-\d{2}-\d{2}$/.test(q)) setDay(q);
+  else setCurrentDay();
+  void loadReport();
+});
 watch([from, () => currentCompany.value.id], loadReport);
 
 const dayOrders = computed(() =>

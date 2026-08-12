@@ -8,3 +8,4 @@ export * from "./schema.js";
 export * from "./demo.js";
 export * from "./receipt.js";
 export * from "./closeday.js";
+export * from "./stock.js";

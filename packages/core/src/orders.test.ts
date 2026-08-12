@@ -4,12 +4,12 @@ import type { PricedItem } from "./types.js";
 
 const fish: PricedItem = {
   id: 1, key: "talapia", name: "Talapia", image: "", unit: "kg",
-  priceCents: 1800, active: true, tracksTail: true, sortOrder: 0,
+  priceCents: 1800, active: true, tracksTail: true, stockMilli: null, sortOrder: 0,
   tiers: [{ id: 1, itemId: 1, minQtyMilli: 30000, priceCents: 1500 }],
 };
 const rice: PricedItem = {
   id: 2, key: "rice", name: "Rice", image: "", unit: "kg",
-  priceCents: 350, active: true, tracksTail: false, sortOrder: 0, tiers: [],
+  priceCents: 350, active: true, tracksTail: false, stockMilli: null, sortOrder: 0, tiers: [],
 };
 const byId = new Map([[1, fish], [2, rice]]);
 const resolve = (l: { itemId?: number }) => (l.itemId != null ? byId.get(l.itemId) ?? null : null);

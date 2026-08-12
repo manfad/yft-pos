@@ -24,9 +24,13 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ "update:modelValue": [value: number] }>();
 
+// Two root nodes (field + dialog) disable automatic attr fallthrough, so a
+// caller's class (e.g. a fixed width) must be forwarded to the field explicitly.
+defineOptions({ inheritAttrs: false });
+
 const open = ref(false);
-// `decimals: 2` is only ever used for RM amounts, and RM amounts are typed
-// cents-first on the numpad (3,0,0 -> 3.00).
+// `decimals: 2` is only ever used for RM amounts; the numpad shows an RM
+// label for those.
 const money = computed(() => props.decimals === 2);
 function onConfirm(v: number): void {
   emit("update:modelValue", v);
@@ -36,9 +40,10 @@ function onConfirm(v: number): void {
 
 <template>
   <button
+    v-bind="$attrs"
     type="button"
-    class="inline-flex items-center justify-center gap-6px rounded-12px border-2 border-border bg-white text-ink cursor-pointer press hover:border-olive"
-    :class="big ? 'h-56px min-w-130px px-16px text-22px' : 'h-44px min-w-92px px-12px text-16px'"
+    class="inline-flex items-center justify-center gap-6px rounded-12px border-2 border-border bg-white text-ink cursor-pointer press hover:border-olive outline-none focus:outline-none"
+    :class="big ? 'h-56px min-w-130px px-16px text-22px' : 'h-44px min-w-0 px-12px text-16px'"
     @click="open = true"
   >
     <span v-if="prefix" class="font-700 text-muted">{{ prefix }}</span>

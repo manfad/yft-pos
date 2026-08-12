@@ -32,4 +32,13 @@ describe("receipt print layout", () => {
   it("prints the invoice number, not the internal order id", () => {
     expect(renderReceiptHtml(receipt)).toContain("Receipt #08-1000");
   });
+
+  it("prints the creditor name for a Credit sale", () => {
+    const creditReceipt: Receipt = { ...receipt, method: "Credit", creditorName: "Pak Abu" };
+    expect(renderReceiptHtml(creditReceipt)).toContain('<div class="creditor">Pak Abu</div>');
+  });
+
+  it("prints nothing extra for a non-Credit sale", () => {
+    expect(renderReceiptHtml(receipt)).not.toContain('class="creditor"');
+  });
 });

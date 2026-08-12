@@ -1,36 +1,37 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { fmtMoney, type ItemSale, type Order, type PaymentMethod } from "@yf/core";
+import { fmtMoney, localDateStr, type ItemSale, type Order, type PaymentMethod } from "@yf/core";
 import TopBar from "../components/TopBar.vue";
 import ReceiptDialog from "../components/ReceiptDialog.vue";
 import OrdersDialog from "../components/OrdersDialog.vue";
 import TopSellerCard from "../components/TopSellerCard.vue";
 import SalesSummaryPanel from "../components/SalesSummaryPanel.vue";
 import { useSales } from "../stores/sales";
+import { useCatalog } from "../stores/catalog";
 import { PAYMENT_UI } from "../payments";
 import { SHOW_MONTH_CHART } from "../config";
 import {
   from,
-  startMs,
-  endMs,
+  maxDate,
   dateLabel,
+  setCurrentDay,
   setDay,
-  weekStartMs,
-  weekEndMs,
+  weekStartStr,
+  weekEndStr,
   weekDays,
   weekLabel,
   monthLabel,
-  monthStartMs,
+  monthStartStr,
+  monthEndStr,
   monthYear,
   monthIndex,
   daysInMonth,
   monthMaxDay,
-  monthTodayDate,
+  monthCurrentDate,
 } from "../salesDate";
 import dayjs from "dayjs";
 
 const sales = useSales();
-onMounted(() => void sales.load());
 
 const tab = ref<"date" | "week" | "month">("date");
 const detail = ref<Order | null>(null);
@@ -39,10 +40,16 @@ const detail = ref<Order | null>(null);
 // shared `from` date, so picking a date re-scopes the Day / Weekly / Monthly view
 // to that day's day / week / month.
 function loadForTab(): void {
-  if (tab.value === "date") void sales.loadRange(startMs.value, endMs.value);
-  else if (tab.value === "week") void sales.loadRange(weekStartMs.value, weekEndMs.value);
-  else void sales.loadMonth(new Date(monthStartMs.value));
+  if (tab.value === "date") void sales.loadRange(from.value, from.value);
+  else if (tab.value === "week") void sales.loadRange(weekStartStr.value, weekEndStr.value);
+  else void sales.loadMonth(monthStartStr.value, monthEndStr.value);
 }
+// Entering the dashboard always starts from the live business day — a date
+// picked on a previous visit (or left by /report) must not stick around.
+onMounted(() => {
+  setCurrentDay();
+  loadForTab();
+});
 watch([tab, from], loadForTab);
 
 const rangeTx = computed(() => [...sales.rangeOrders].sort((a, b) => b.ts - a.ts));
@@ -51,15 +58,18 @@ const rangeTx = computed(() => [...sales.rangeOrders].sort((a, b) => b.ts - a.ts
 const DAY_HOUR_START = 7;
 const DAY_HOUR_END = 17;
 const dayHourly = computed(() => {
-  const isSelectedToday = from.value === dayjs().format("YYYY-MM-DD");
+  const isCurrentDay = from.value === maxDate.value;
   const nowHour = new Date().getHours();
   const buckets = Array.from({ length: DAY_HOUR_END - DAY_HOUR_START + 1 }, (_, i) => {
     const hour = DAY_HOUR_START + i;
-    return { hour, total: 0, count: 0, isNow: isSelectedToday && hour === nowHour };
+    return { hour, total: 0, count: 0, isNow: isCurrentDay && hour === nowHour };
   });
   for (const o of sales.rangeOrders) {
     if (o.voidedAt != null) continue; // cancelled sales don't chart
-    const h = new Date(o.ts).getHours();
+    // A sale rung up after Close Day carries into the next business day: chart it
+    // at that day's opening hour, not at the previous evening's clock hour.
+    const carried = localDateStr(o.ts) !== o.businessDate;
+    const h = carried ? DAY_HOUR_START : new Date(o.ts).getHours();
     if (h < DAY_HOUR_START || h > DAY_HOUR_END) continue;
     const b = buckets[h - DAY_HOUR_START]!;
     b.total += o.totalCents;
@@ -78,14 +88,13 @@ const hourRange = (h: number) => {
 // per-day sums within the selected week (rangeOrders holds that week on the week tab)
 const weekDaily = computed(() =>
   weekDays.value.map((d) => {
-    const s = d.valueOf();
-    const e = d.add(1, "day").valueOf();
-    const orders = sales.rangeOrders.filter((o) => o.voidedAt == null && o.ts >= s && o.ts < e);
+    const date = d.format("YYYY-MM-DD");
+    const orders = sales.rangeOrders.filter((o) => o.voidedAt == null && o.businessDate === date);
     return {
       total: orders.reduce((a, o) => a + o.totalCents, 0),
       count: orders.length,
       day: d,
-      isToday: d.isSame(dayjs(), "day"),
+      isCurrent: date === maxDate.value,
     };
   }),
 );
@@ -120,11 +129,14 @@ function inspectItem(s: ItemSale): void {
     ),
   };
 }
+// Bars are per business day, so a carried sale sits on the day it counts toward
+// (its wall-clock date is the day before).
+const businessDay = (o: Order) => Number(o.businessDate.slice(8, 10));
 const dailySums = computed(() => {
   const sums = new Array<number>(daysInMonth.value + 1).fill(0);
   for (const o of sales.monthOrders) {
     if (o.voidedAt != null) continue; // cancelled sales don't chart
-    const d = new Date(o.ts).getDate();
+    const d = businessDay(o);
     sums[d] = (sums[d] ?? 0) + o.totalCents;
   }
   return sums;
@@ -133,14 +145,14 @@ const dailyCount = computed(() => {
   const c = new Array<number>(daysInMonth.value + 1).fill(0);
   for (const o of sales.monthOrders) {
     if (o.voidedAt != null) continue;
-    const d = new Date(o.ts).getDate();
+    const d = businessDay(o);
     c[d] = (c[d] ?? 0) + 1;
   }
   return c;
 });
 const maxSum = computed(() => Math.max(1, ...dailySums.value));
 const barH = (d: number) => Math.max(4, Math.round((dailySums.value[d]! / maxSum.value) * 132));
-const barLabel = (d: number) => (d === 1 || d % 5 === 0 || d === monthTodayDate.value ? String(d) : "");
+const barLabel = (d: number) => (d === 1 || d % 5 === 0 || d === monthCurrentDate.value ? String(d) : "");
 const dayLabel = (d: number) =>
   new Date(monthYear.value, monthIndex.value, d).toLocaleDateString("en-GB", {
     weekday: "short",
@@ -158,9 +170,11 @@ const dateStr = (ts: number) =>
 const itemsStr = (o: Order) => `${o.items.length} ${o.items.length === 1 ? "item" : "items"}`;
 
 // A sale was cancelled from the receipt dialog — refresh every list/stat.
+// Cancelling also restores stock, so the till's catalog must reload too.
 function onVoided(updated: Order): void {
   detail.value = updated;
   void sales.load();
+  void useCatalog().load();
 }
 </script>
 
@@ -285,10 +299,10 @@ function onVoided(updated: Order): void {
             </div>
             <div
               class="w-full max-w-46px rounded-t-6px transition-opacity group-hover:opacity-80"
-              :class="x.isToday ? 'bg-terracotta' : 'bg-chart'"
+              :class="x.isCurrent ? 'bg-terracotta' : 'bg-chart'"
               :style="{ height: weekBarH(x.total) + 'px' }"
             />
-            <div class="text-12px font-700 h-16px" :class="x.isToday ? 'text-terracotta' : 'text-faint'">
+            <div class="text-12px font-700 h-16px" :class="x.isCurrent ? 'text-terracotta' : 'text-faint'">
               {{ x.day.format("ddd") }}
             </div>
           </div>
@@ -365,7 +379,7 @@ function onVoided(updated: Order): void {
             </div>
             <div
               class="w-full max-w-26px rounded-t-6px transition-opacity group-hover:opacity-80"
-              :class="[d === monthTodayDate ? 'bg-terracotta' : 'bg-chart', d <= monthMaxDay ? 'cursor-pointer' : '']"
+              :class="[d === monthCurrentDate ? 'bg-terracotta' : 'bg-chart', d <= monthMaxDay ? 'cursor-pointer' : '']"
               :style="{ height: barH(d) + 'px' }"
               @click="d <= monthMaxDay && openDay(d)"
             />

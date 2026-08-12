@@ -491,3 +491,65 @@ describe("Close Day, void, settings, outbox", () => {
     expect(rows[0]!.sentAt).toBeNull();
   });
 });
+
+describe("stock tracking", () => {
+  let repo: SqlPosRepo;
+  beforeEach(async () => {
+    repo = await freshRepo();
+  });
+
+  const stockedItem = () =>
+    repo.createItem({ key: "cup-drink", name: "Cup Drink", unit: "cup", priceCents: 500, stockMilli: 5000 });
+
+  it("deducts stock when a sale is made, but only for tracked items", async () => {
+    const cup = await stockedItem();
+    const fish = (await repo.getItemByKey("tilapia"))!; // no stock set — untracked
+
+    await createOrder(repo, {
+      method: "Cash",
+      ts: 1000,
+      lines: [
+        { itemId: cup.id, qtyMilli: 2000 },
+        { itemId: fish.id, qtyMilli: 3000, tailCount: 1 },
+      ],
+    });
+    expect((await repo.getItem(cup.id))!.stockMilli).toBe(3000);
+    expect((await repo.getItem(fish.id))!.stockMilli).toBeNull();
+  });
+
+  it("rejects a sale that oversells the remaining stock", async () => {
+    const cup = await stockedItem();
+    await expect(
+      createOrder(repo, { method: "Cash", ts: 1000, lines: [{ itemId: cup.id, qtyMilli: 6000 }] }),
+    ).rejects.toThrow(/stock/);
+    // The whole order rolled back: nothing sold, nothing deducted.
+    expect((await repo.getItem(cup.id))!.stockMilli).toBe(5000);
+    expect((await repo.listOrders(0, Number.MAX_SAFE_INTEGER)).length).toBe(0);
+  });
+
+  it("restores stock when a sale is voided — once, even on a double void", async () => {
+    const cup = await stockedItem();
+    const order = await createOrder(repo, {
+      method: "Cash",
+      ts: 1000,
+      lines: [{ itemId: cup.id, qtyMilli: 2000 }],
+    });
+    expect((await repo.getItem(cup.id))!.stockMilli).toBe(3000);
+
+    await repo.voidOrder(order.id, 2000);
+    expect((await repo.getItem(cup.id))!.stockMilli).toBe(5000);
+    await repo.voidOrder(order.id, 3000); // double void must not restore again
+    expect((await repo.getItem(cup.id))!.stockMilli).toBe(5000);
+  });
+
+  it("updateItem can set, change and clear the stock count", async () => {
+    const cup = await stockedItem();
+    await repo.updateItem(cup.id, { stockMilli: 9000 });
+    expect((await repo.getItem(cup.id))!.stockMilli).toBe(9000);
+    // Absent key keeps the current stock; explicit null stops tracking.
+    await repo.updateItem(cup.id, { name: "Cup Drink XL" });
+    expect((await repo.getItem(cup.id))!.stockMilli).toBe(9000);
+    await repo.updateItem(cup.id, { stockMilli: null });
+    expect((await repo.getItem(cup.id))!.stockMilli).toBeNull();
+  });
+});

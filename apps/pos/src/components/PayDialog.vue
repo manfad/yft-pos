@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
-import { fmtMoney, PAYMENT_METHODS, toRM, type PaymentMethod } from "@yf/core";
+import { fmtMoney, PAYMENT_METHODS, toCents, toRM, type PaymentMethod } from "@yf/core";
 import { PAYMENT_UI } from "../payments";
-import { useCentsEntry } from "../centsEntry";
 
 const props = defineProps<{ open: boolean; totalCents: number }>();
 // "Credit" is special: it opens the creditor picker rather than settling here.
@@ -11,22 +10,29 @@ const emit = defineEmits<{ confirm: [method: PaymentMethod]; credit: []; close: 
 // The dialog is either the method list or the cash calculator. The calculator
 // is a cashier's scratch pad: nothing it computes is stored with the sale.
 const view = ref<"methods" | "calc">("methods");
-const received = useCentsEntry();
-const receivedText = received.text;
-const changeCents = computed(() => received.cents.value - props.totalCents);
+const receivedEntry = ref("");
+const receivedText = computed(() => receivedEntry.value || "0");
+const changeCents = computed(() => toCents(Number(receivedEntry.value) || 0) - props.totalCents);
 const short = computed(() => changeCents.value < 0);
 const amount = (cents: number): string => toRM(cents).toFixed(2);
 
-const KEYS = ["7", "8", "9", "4", "5", "6", "1", "2", "3", "00", "0", "⌫"];
+const KEYS = ["7", "8", "9", "4", "5", "6", "1", "2", "3", ".", "0", "⌫"];
 
 function openCalc(): void {
-  received.reset();
+  receivedEntry.value = "";
   view.value = "calc";
 }
 
 function tap(k: string): void {
-  if (k === "⌫") received.backspace();
-  else received.push(k);
+  if (k === "⌫") {
+    receivedEntry.value = receivedEntry.value.slice(0, -1);
+    return;
+  }
+  if (k === ".") {
+    if (receivedEntry.value.includes(".")) return;
+    if (receivedEntry.value === "") receivedEntry.value = "0";
+  }
+  receivedEntry.value += k;
 }
 
 watch(
@@ -34,15 +40,15 @@ watch(
   (o) => {
     if (o) {
       view.value = "methods";
-      received.reset();
+      receivedEntry.value = "";
     }
   },
 );
 
-// Hardware keyboard / USB numpad, same as the quantity numpad: digits type,
-// Backspace deletes, Enter pays, Escape steps back to the method list.
+// Hardware keyboard / USB numpad, same as the quantity numpad: digits and "."
+// type, Backspace deletes, Enter pays, Escape steps back to the method list.
 function onKeydown(e: KeyboardEvent): void {
-  if (/^[0-9]$/.test(e.key)) tap(e.key);
+  if (/^[0-9.]$/.test(e.key)) tap(e.key);
   else if (e.key === "Backspace") tap("⌫");
   else if (e.key === "Enter") emit("confirm", "Cash");
   else if (e.key === "Escape") view.value = "methods";
@@ -92,16 +98,30 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
             <!-- change calculator: scratch pad only, never settles the sale -->
             <button
               v-if="m === 'Cash'"
-              class="w-96px flex-none flex flex-col items-center justify-center gap-4px rounded-18px border-2 border-olive bg-white text-olive cursor-pointer press"
+              class="w-96px flex-none flex flex-col items-center justify-center gap-4px rounded-18px border-2 border-border bg-tile cursor-pointer transition-transform active:translate-y-2px"
               aria-label="Cash change calculator"
               @click="openCalc"
             >
-              <svg viewBox="0 0 24 24" class="w-26px h-26px" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <rect x="4" y="2.5" width="16" height="19" rx="3" />
-                <path d="M7.5 7h9" />
-                <path d="M8.5 12h0M12 12h0M15.5 12h0M8.5 16.5h0M12 16.5h0M15.5 16.5h0" stroke-width="2.6" />
-              </svg>
-              <span class="text-13px font-800 uppercase tracking-wide">Change</span>
+              <!-- color SVG: the calculator emoji has no color glyph on some platforms -->
+              <span
+                class="w-40px h-40px flex-none rounded-12px flex items-center justify-center"
+                :style="{ background: PAYMENT_UI.Cash.tint }"
+              >
+                <svg viewBox="0 0 24 24" class="w-24px h-24px" aria-hidden="true">
+                  <rect x="4" y="2" width="16" height="20" rx="3" fill="#5b6d3f" />
+                  <rect x="6.2" y="4.4" width="11.6" height="4.6" rx="1.2" fill="#d8e6c4" />
+                  <g fill="#f6f1e4">
+                    <rect x="6.2" y="11" width="3" height="2.6" rx="0.8" />
+                    <rect x="10.5" y="11" width="3" height="2.6" rx="0.8" />
+                    <rect x="6.2" y="15" width="3" height="2.6" rx="0.8" />
+                    <rect x="10.5" y="15" width="3" height="2.6" rx="0.8" />
+                    <rect x="6.2" y="19" width="7.3" height="1.4" rx="0.7" />
+                  </g>
+                  <rect x="14.8" y="11" width="3" height="2.6" rx="0.8" fill="#e8a13c" />
+                  <rect x="14.8" y="15" width="3" height="5.4" rx="0.8" fill="#e8a13c" />
+                </svg>
+              </span>
+              <span class="text-13px font-800 uppercase tracking-wide text-ink">Change</span>
             </button>
           </div>
         </div>

@@ -67,4 +67,51 @@ describe("buildReceipt", () => {
     // bottle: no ekor suffix, bare number qty
     expect(receipt.lines[1]).toMatchObject({ name: "Fresh Milk 1 L", qtyText: "1" });
   });
+
+  it("carries the creditor name onto the receipt for Credit sales", () => {
+    const order: Order = {
+      id: 3,
+      companyId: 1,
+      ts: new Date(2026, 5, 23, 10, 30).getTime(),
+      businessDate: "2026-06-23",
+      invNo: "06-1002",
+      voidedAt: null,
+      method: "Credit",
+      totalCents: 1000,
+      creditorName: "Pak Abu",
+      items: [
+        {
+          id: 1, itemId: 1, name: "Ikan Tilapia", image: "", unit: "kg",
+          priceCents: 1000, qtyMilli: 1000, amountCents: 1000, tailCount: 0, bulkPrice: false,
+        },
+      ],
+    };
+
+    const receipt = buildReceipt(order, { storeName: "Yun Fook Trading" });
+
+    expect(receipt.creditorName).toBe("Pak Abu");
+  });
+
+  it("leaves creditorName unset for non-Credit sales", () => {
+    const order: Order = {
+      id: 4,
+      companyId: 1,
+      ts: new Date(2026, 5, 23, 10, 30).getTime(),
+      businessDate: "2026-06-23",
+      invNo: "06-1003",
+      voidedAt: null,
+      method: "Cash",
+      totalCents: 1000,
+      items: [
+        {
+          id: 1, itemId: 1, name: "Ikan Tilapia", image: "", unit: "kg",
+          priceCents: 1000, qtyMilli: 1000, amountCents: 1000, tailCount: 0, bulkPrice: false,
+        },
+      ],
+    };
+
+    const receipt = buildReceipt(order, { storeName: "Yun Fook Trading" });
+
+    expect(receipt.creditorName).toBeUndefined();
+  });
 });

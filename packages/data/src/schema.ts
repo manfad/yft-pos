@@ -26,6 +26,7 @@ export const items = sqliteTable("items", {
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   tracksTail: integer("tracks_tail", { mode: "boolean" }).notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
+  stockMilli: integer("stock_milli"),
 });
 
 export const priceTiers = sqliteTable("price_tiers", {

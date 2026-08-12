@@ -209,6 +209,10 @@ export async function initRepo(db: SqlDriver, opts: InitOptions = {}): Promise<S
   const sortOrderAdded = await ensureColumn(db, "items", "sort_order", "INTEGER NOT NULL DEFAULT 0");
   if (sortOrderAdded) await db.run("UPDATE items SET sort_order = id");
 
+  // Optional stock tracking (also after the items rebuild, for the same reason).
+  // NULL = untracked, so existing items keep selling without limit.
+  await ensureColumn(db, "items", "stock_milli", "INTEGER");
+
   // When tracks_tail is first added to an existing DB, the seeded catalogue is
   // already there (so the seed block below won't run). Mark the items that ship
   // as tail-tracking (fish/chicken) once, by key — only on this first add, so a

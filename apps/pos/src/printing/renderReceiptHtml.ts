@@ -140,6 +140,12 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
     margin-top: 2mm;
   }
   .pay-method { font-weight: 700; }
+  .creditor {
+    text-align: center;
+    font-size: 8.5pt;
+    font-weight: 800;
+    margin-top: 1mm;
+  }
   .foot {
     text-align: center;
     font-size: 7.2pt;
@@ -152,6 +158,7 @@ export function renderReceiptHtml(r: Receipt, widthMm: number = PAPER_WIDTH_MM):
     <div class="meta">Receipt #${esc(r.invNo)}</div>
     <div class="store">${esc(r.storeName)}</div>
     <div class="meta">${esc(r.dateText)}</div>
+    ${r.creditorName ? `<div class="creditor">${esc(r.creditorName)}</div>` : ""}
     <div class="hr"></div>
     <div class="table-head"><span>ITEM</span><span class="h-qty">QTY</span><span class="h-amt">AMOUNT (RM)</span></div>
     ${rows}

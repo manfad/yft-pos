@@ -40,6 +40,8 @@ interface EditDraft {
   image: string;
   active: boolean;
   tracksTail: boolean;
+  /** stock on hand in units (kg may be fractional); null = not tracked */
+  stockUnits: number | null;
   tiers: TierDraft[];
 }
 const editing = ref<EditDraft | null>(null);
@@ -100,6 +102,7 @@ function openAdd(): void {
     image: "",
     active: true,
     tracksTail: false,
+    stockUnits: null,
     tiers: [],
   };
 }
@@ -113,6 +116,7 @@ function openEdit(it: PricedItem): void {
     image: it.image,
     active: it.active,
     tracksTail: it.tracksTail,
+    stockUnits: it.stockMilli != null ? toQty(it.stockMilli) : null,
     tiers: it.tiers.map((t) => ({ minQtyUnits: toQty(t.minQtyMilli), priceRM: toRM(t.priceCents) })),
   };
 }
@@ -134,6 +138,8 @@ async function saveEdit(): Promise<void> {
   const repo = await getRepo();
   try {
     const priceCents = priceFromRM(d.priceRM, "Price");
+    // Unchecked = untracked. kg stock may be fractional (12.5 kg), counts whole.
+    const stockMilli = d.stockUnits == null ? null : toMilli(Math.max(0, d.stockUnits));
     const tiers = d.tiers
       .filter((t) => t.minQtyUnits > 0)
       .map((t, i) => ({
@@ -148,6 +154,7 @@ async function saveEdit(): Promise<void> {
         image: d.image,
         priceCents,
         tracksTail: d.tracksTail,
+        stockMilli,
       });
       if (tiers.length) await repo.setTiers(created.id, tiers);
     } else {
@@ -158,6 +165,7 @@ async function saveEdit(): Promise<void> {
         priceCents,
         active: d.active,
         tracksTail: d.tracksTail,
+        stockMilli,
       });
       await repo.setTiers(d.id, tiers);
     }
@@ -204,6 +212,7 @@ async function doDelete(): Promise<void> {
           <tr class="text-left text-13px font-800 text-muted uppercase tracking-wide">
             <th class="p-12px bg-panel sticky top-0 z-1 w-44px"></th>
             <th class="p-12px bg-panel sticky top-0 z-1">Item</th>
+            <th class="p-12px bg-panel sticky top-0 z-1 text-right">Stock</th>
             <th class="p-12px bg-panel sticky top-0 z-1">Unit</th>
             <th class="p-12px bg-panel sticky top-0 z-1 text-right">Price</th>
             <th class="p-12px bg-panel sticky top-0 z-1">Conditions</th>
@@ -249,6 +258,13 @@ async function doDelete(): Promise<void> {
                 >ekor</span>
               </div>
             </td>
+            <td class="p-12px text-right font-display text-17px">
+              <span
+                v-if="it.stockMilli != null"
+                :class="it.stockMilli <= 0 ? 'font-800 text-[#d94b3d]' : ''"
+              >{{ toQty(it.stockMilli) }}</span>
+              <span v-else class="text-faint" title="Stock not tracked">∞</span>
+            </td>
             <td class="p-12px text-15px font-700">{{ it.unit }}</td>
             <td class="p-12px text-right font-display text-18px">{{ fmtMoney(it.priceCents) }}</td>
             <td class="p-12px">
@@ -285,7 +301,7 @@ async function doDelete(): Promise<void> {
     class="fixed inset-0 bg-[rgba(44,38,32,.45)] flex items-center justify-center p-24px z-70"
     @click.self="editing = null"
   >
-    <div class="w-full max-w-560px bg-cream border-2 border-border rounded-22px shadow-[0_24px_60px_rgba(0,0,0,.3)] p-26px max-h-[90vh] overflow-auto">
+    <div class="w-full max-w-600px bg-cream border-2 border-border rounded-22px shadow-[0_24px_60px_rgba(0,0,0,.3)] p-26px max-h-[90vh] overflow-auto">
       <div class="text-22px font-800 mb-18px">
         {{ editing.id === 0 ? "Add item" : `Edit ${editing.name}` }}
       </div>
@@ -316,18 +332,60 @@ async function doDelete(): Promise<void> {
           </div>
           <!-- right: name, then unit + price -->
           <div class="flex-1 min-w-0 flex flex-col gap-12px">
-            <label class="flex flex-col gap-4px text-13px font-700 text-muted">
-              Name
-              <TextInput v-model="editing.name" title="Item name" placeholder="e.g. Durian" class="w-full" />
-            </label>
+            <div class="flex gap-12px">
+              <label class="flex-1 min-w-0 flex flex-col gap-4px text-13px font-700 text-muted">
+                Name
+                <TextInput v-model="editing.name" title="Item name" placeholder="e.g. Durian" class="w-full" />
+              </label>
+              <div class="flex flex-col gap-4px text-13px font-700 text-muted">
+                <!-- the checkbox toggles tracking; unchecked = unlimited -->
+                <button
+                  type="button"
+                  class="flex items-center gap-6px bg-transparent border-none p-0 cursor-pointer text-13px font-700 text-muted"
+                  :title="editing.stockUnits != null ? 'Sales deduct stock; 0 shows as out of stock' : 'Stock not tracked — sells without a count'"
+                  @click="editing.stockUnits = editing.stockUnits == null ? 0 : null"
+                >
+                  Stock
+                  <span
+                    class="w-18px h-18px flex-none rounded-5px border-2 flex items-center justify-center"
+                    :class="editing.stockUnits != null ? 'bg-olive border-olive' : 'border-border bg-white'"
+                  >
+                    <svg
+                      v-if="editing.stockUnits != null"
+                      viewBox="0 0 24 24"
+                      class="w-12px h-12px text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="4"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 13l4 4L19 7" />
+                    </svg>
+                  </span>
+                </button>
+                <NumberInput
+                  v-if="editing.stockUnits != null"
+                  :model-value="editing.stockUnits ?? 0"
+                  title="Stock on hand"
+                  class="w-84px"
+                  @update:model-value="editing.stockUnits = $event"
+                />
+                <div
+                  v-else
+                  class="h-44px w-84px rounded-10px border-2 border-dashed border-border bg-tile flex items-center justify-center text-15px font-800 text-faint"
+                  title="Stock not tracked"
+                >∞</div>
+              </div>
+            </div>
             <div class="flex gap-12px items-end">
               <div class="flex flex-col gap-4px text-13px font-700 text-muted">
                 Unit
-                <SelectInput v-model="editing.unit" :options="unitOptions" class="w-120px" />
+                <SelectInput v-model="editing.unit" :options="unitOptions" class="w-110px" />
               </div>
               <div class="flex flex-col gap-4px text-13px font-700 text-muted">
                 Price
-                <NumberInput v-model="editing.priceRM" title="Item price (RM)" prefix="RM" :decimals="2" class="w-130px" />
+                <NumberInput v-model="editing.priceRM" title="Item price (RM)" prefix="RM" :decimals="2" class="w-120px" />
               </div>
               <!-- sold by the head: surfaces a separate "ekor" counter on the till -->
               <button

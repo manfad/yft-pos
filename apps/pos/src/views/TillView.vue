@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { buildReceipt, fmtMoney, unitLabel, type PaymentMethod } from "@yf/core";
+import { buildReceipt, fmtMoney, stockLeftMilli, unitLabel, type PaymentMethod } from "@yf/core";
 import TopBar from "../components/TopBar.vue";
 import ProductCard from "../components/ProductCard.vue";
 import CartLine from "../components/CartLine.vue";
@@ -34,18 +34,25 @@ async function openCreditor(): Promise<void> {
 }
 async function confirmCredit(name: string): Promise<void> {
   creditorOpen.value = false;
-  const order = await cart.pay("Credit", name);
+  let order;
+  try {
+    order = await cart.pay("Credit", name);
+  } catch (e) {
+    ui.showToast(e instanceof Error ? e.message : "Payment failed");
+    return;
+  }
   if (order) {
     ui.showToast(`Credit · ${name} · ${fmtMoney(order.totalCents)}`);
+    void catalog.load();
     void printer
       .print(buildReceipt(order, { storeName: currentCompany.value.name }))
       .catch(() => ui.showToast("Printing failed"));
   }
 }
 
-onMounted(() => {
-  if (catalog.items.length === 0) void catalog.load();
-});
+// Always refresh on entry: stock counts move under us (sales, admin restocks,
+// cancelled orders), and a stale zero would gray out a tile that's back in stock.
+onMounted(() => void catalog.load());
 
 const active = computed(() => cart.active);
 // The cart shows a Tail column only when at least one line tracks tail.
@@ -54,7 +61,16 @@ watch(active, (line) => {
   if (!line) adjustSheetOpen.value = false;
 });
 
+// Out-of-stock popup: a sold-out card stays on the grid but taps land here.
+const stockAlertName = ref<string | null>(null);
+
 function addItem(item: Parameters<typeof cart.add>[0]): void {
+  // Count what's already in the cart, so tapping past the last unit also pops.
+  const inCart = cart.lines.find((l) => l.item.id === item.id)?.qtyMilli ?? 0;
+  if (stockLeftMilli(item) - inCart <= 0) {
+    stockAlertName.value = item.name;
+    return;
+  }
   cart.add(item);
   adjustSheetOpen.value = true;
 }
@@ -77,9 +93,17 @@ function openNumpad(uid?: number, mode: "qty" | "tail" = "qty"): void {
   }
 }
 function confirmQty(value: number): void {
-  if (numpadUid.value != null) {
-    if (numpadMode.value === "tail") cart.setTail(numpadUid.value, value);
-    else cart.setQty(numpadUid.value, value);
+  const line = numpadLine.value;
+  if (numpadUid.value != null && line) {
+    if (numpadMode.value === "tail") {
+      cart.setTail(numpadUid.value, value);
+    } else {
+      // The cart clamps at remaining stock; tell the cashier when it did.
+      if (Math.round(value * 1000) > stockLeftMilli(line.item)) {
+        stockAlertName.value = line.item.name;
+      }
+      cart.setQty(numpadUid.value, value);
+    }
   }
   numpadUid.value = null;
 }
@@ -99,10 +123,20 @@ function openPay(): void {
   payOpen.value = true;
 }
 async function confirm(method: PaymentMethod): Promise<void> {
-  const order = await cart.pay(method);
-  payOpen.value = false;
+  let order;
+  try {
+    order = await cart.pay(method);
+  } catch (e) {
+    // e.g. the stock guard in the repo (another till got the last unit first).
+    ui.showToast(e instanceof Error ? e.message : "Payment failed");
+    return;
+  } finally {
+    payOpen.value = false;
+  }
   if (order) {
     ui.showToast(`Payment complete · ${method} · ${fmtMoney(order.totalCents)}`);
+    // Selling deducts stock — refresh the grid so sold-out tiles gray out.
+    void catalog.load();
     // Auto-print the receipt on payment.
     void printer
       .print(buildReceipt(order, { storeName: currentCompany.value.name }))
@@ -208,12 +242,25 @@ async function confirm(method: PaymentMethod): Promise<void> {
     @close="creditorOpen = false"
   />
 
+  <!-- out-of-stock popup -->
+  <div
+    v-if="stockAlertName"
+    class="fixed inset-0 bg-[rgba(44,38,32,.45)] flex items-center justify-center p-24px z-90"
+    @click.self="stockAlertName = null"
+  >
+    <div class="w-full max-w-400px bg-cream border-2 border-border rounded-22px shadow-[0_24px_60px_rgba(0,0,0,.3)] p-26px text-center">
+      <div class="text-40px mb-8px">📦</div>
+      <div class="text-21px font-800 mb-6px">{{ stockAlertName }} is out of stock</div>
+      <div class="text-15px font-700 text-muted mb-20px">Please add more stock in Items.</div>
+      <button class="btn-pay w-full h-54px text-18px" @click="stockAlertName = null">OK</button>
+    </div>
+  </div>
+
   <NumpadDialog
     :open="numpadLine !== null"
     :title="`${numpadLine?.item.name ?? ''} — ${numpadMode === 'tail' ? 'Ekor' : 'quantity'}`"
     :unit="numpadMode === 'tail' ? 'ekor' : unitLabel(numpadLine?.item.unit ?? 'each')"
     :initial="numpadLine ? (numpadMode === 'tail' ? numpadLine.tailCount : numpadLine.qtyMilli / 1000) : 0"
-    :money="numpadMode !== 'tail' && numpadLine?.item.unit === 'kg'"
     @confirm="confirmQty"
     @close="numpadUid = null"
   />

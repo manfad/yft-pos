@@ -13,6 +13,8 @@ export interface ItemInput {
   priceCents: number;
   /** sold by the head — capture a tail/"ekor" count alongside weight */
   tracksTail?: boolean;
+  /** remaining stock in milli-units; null/omitted = not stock-tracked */
+  stockMilli?: number | null;
 }
 
 export type ItemPatch = Partial<Omit<ItemInput, "key">> & { active?: boolean };

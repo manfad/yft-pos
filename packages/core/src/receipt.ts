@@ -18,6 +18,8 @@ export interface Receipt {
   invNo: string;
   dateText: string;
   method: PaymentMethod;
+  /** Set for Credit sales: the creditor the order is owed by. */
+  creditorName?: string;
   itemCount: number;
   lines: ReceiptLine[];
   totalText: string;
@@ -48,6 +50,7 @@ export function buildReceipt(order: Order, opts: BuildReceiptOptions): Receipt {
     invNo: order.invNo,
     dateText,
     method: order.method,
+    creditorName: order.creditorName,
     itemCount: order.items.length,
     totalText: fmtMoney(order.totalCents),
     footer: opts.footer ?? "Thank you!",

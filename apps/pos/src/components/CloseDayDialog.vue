@@ -4,6 +4,7 @@ import { computeStats, fmtMoney, localDateStr, type DayClose, type Order } from 
 import { getRepo } from "../db";
 import { currentCompany } from "../place";
 import { getTodayClose, performClose, performReopen, type DailyReportDelivery } from "../business";
+import { refreshBusinessDate } from "../salesDate";
 import PinDialog from "./PinDialog.vue";
 import Loading from "./Loading.vue";
 
@@ -93,6 +94,8 @@ const doneMessage = computed(() =>
 async function reopen(): Promise<void> {
   pinOpen.value = false;
   await performReopen(currentCompany.value.id);
+  // Sales count as today again — pull the date picker's ceiling back with them.
+  await refreshBusinessDate();
   await load();
 }
 

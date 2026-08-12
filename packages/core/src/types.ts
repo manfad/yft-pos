@@ -36,6 +36,11 @@ export interface Item {
    * kg quantity. Off for everything that isn't an animal/piece.
    */
   tracksTail: boolean;
+  /**
+   * Remaining stock in milli-units, or null when the item isn't stock-tracked.
+   * Counts for countable units (5 cups = 5000), weight for kg (12.5 kg = 12500).
+   */
+  stockMilli: Milli | null;
   /** Manual display position (drag-to-arrange in admin); ties break by id. */
   sortOrder: number;
 }

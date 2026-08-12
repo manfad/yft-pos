@@ -15,7 +15,9 @@ import {
   type OrderLine,
   type Unit,
   INV_SEQ_START,
+  PosError,
   formatInvNo,
+  isStockTracked,
   lineAmount,
   localDateStr,
   nextDateStr,
@@ -49,6 +51,7 @@ const toItem = (r: typeof items.$inferSelect): Item => ({
   priceCents: r.priceCents,
   active: r.active,
   tracksTail: r.tracksTail,
+  stockMilli: r.stockMilli,
   sortOrder: r.sortOrder,
 });
 
@@ -179,6 +182,7 @@ export class SqlPosRepo implements PosRepo {
         unit: input.unit ?? "each",
         priceCents: input.priceCents,
         tracksTail: input.tracksTail ?? false,
+        stockMilli: input.stockMilli ?? null,
       })
       .returning({ id: items.id });
     // New items land at the end of the arranged catalogue.
@@ -202,6 +206,9 @@ export class SqlPosRepo implements PosRepo {
         priceCents: patch.priceCents ?? cur.priceCents,
         active: patch.active ?? cur.active,
         tracksTail: patch.tracksTail ?? cur.tracksTail,
+        // null is a real value here (= stop tracking), so only an absent key
+        // keeps the current stock.
+        stockMilli: patch.stockMilli === undefined ? cur.stockMilli : patch.stockMilli,
       })
       .where(eq(items.id, id));
     return (await this.getItem(id))!;
@@ -263,6 +270,23 @@ export class SqlPosRepo implements PosRepo {
           method: draft.method,
         })
         .returning({ id: orders.id });
+      // Stock check + deduction live inside the sale's transaction, so an
+      // oversell can never slip through between the read and the write.
+      const stockRows = await this.dz
+        .select({ id: items.id, name: items.name, stockMilli: items.stockMilli })
+        .from(items)
+        .where(inArray(items.id, draft.lines.map((l) => l.itemId)));
+      for (const l of draft.lines) {
+        const it = stockRows.find((r) => r.id === l.itemId);
+        if (!it || !isStockTracked(it)) continue;
+        if (l.qtyMilli > it.stockMilli!) {
+          throw new PosError(`not enough stock for ${it.name} — please add more stock`);
+        }
+        await this.dz
+          .update(items)
+          .set({ stockMilli: it.stockMilli! - l.qtyMilli })
+          .where(eq(items.id, it.id));
+      }
       for (const l of draft.lines) {
         await this.dz.insert(orderItems).values({
           orderId: o!.id,
@@ -407,7 +431,26 @@ export class SqlPosRepo implements PosRepo {
 
   async voidOrder(orderId: number, at: number): Promise<void> {
     await this.db.tx(async () => {
+      // Guard on the current voided state so a double-void can't restore
+      // the same stock twice.
+      const [cur] = await this.dz
+        .select({ voidedAt: orders.voidedAt })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .limit(1);
+      if (!cur || cur.voidedAt != null) return;
       await this.dz.update(orders).set({ voidedAt: at }).where(eq(orders.id, orderId));
+      // A cancelled sale puts its stock back on the shelf (tracked items only).
+      const lines = await this.dz
+        .select({ itemId: orderItems.itemId, qtyMilli: orderItems.qtyMilli })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, orderId));
+      for (const l of lines) {
+        await this.db.run(
+          "UPDATE items SET stock_milli = stock_milli + ? WHERE id = ? AND stock_milli IS NOT NULL",
+          [l.qtyMilli, l.itemId],
+        );
+      }
       // A cancelled credit sale is no longer owed — drop its credit record.
       await this.dz.delete(credits).where(eq(credits.orderId, orderId));
     });

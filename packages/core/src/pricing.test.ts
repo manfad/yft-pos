@@ -4,7 +4,7 @@ import type { PricedItem } from "./types.js";
 
 const talapia: PricedItem = {
   id: 1, key: "talapia", name: "Talapia", image: "", unit: "kg",
-  priceCents: 1800, active: true, tracksTail: false, sortOrder: 0,
+  priceCents: 1800, active: true, tracksTail: false, stockMilli: null, sortOrder: 0,
   tiers: [{ id: 1, itemId: 1, minQtyMilli: 30000, priceCents: 1500 }],
 };
 

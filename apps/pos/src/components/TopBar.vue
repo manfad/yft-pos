@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import dayjs from "dayjs";
 import type { Company } from "@yf/core";
 import { companies, currentCompany, setCompany } from "../place";
-import { from, todayStr, dateLabel, setToday, setDay } from "../salesDate";
+import { from, todayStr, maxDate, dateLabel, refreshBusinessDate, setCurrentDay } from "../salesDate";
 import DatePicker from "./DatePicker.vue";
 import SendReportDialog from "./SendReportDialog.vue";
 import CloseDayDialog from "./CloseDayDialog.vue";
@@ -32,9 +32,12 @@ const sendOpen = ref(false);
 const closeDayOpen = ref(false);
 function onDayClosed(businessDate: string): void {
   closeDayOpen.value = false;
+  // Sales from here on carry into tomorrow — that day is now selectable.
+  void refreshBusinessDate();
   // Land the cashier on the just-closed day's report (client takes a copy daily).
-  setDay(businessDate);
-  void router.push("/report");
+  // The date rides in the query: the report resets to the live business day on
+  // entry unless one is passed explicitly.
+  void router.push({ path: "/report", query: { date: businessDate } });
 }
 
 // Company switcher popover.
@@ -46,6 +49,12 @@ function pickCompany(c: Company) {
 
 // Date picker popover (sales mode) — drives the Sales report selection.
 const dateOpen = ref(false);
+function toggleDatePicker(): void {
+  dateOpen.value = !dateOpen.value;
+  // Re-read the close state on open: another window (or this session's till) may
+  // have closed or reopened the day since the picker last rendered.
+  if (dateOpen.value) void refreshBusinessDate();
+}
 function pickDate(v: string) {
   from.value = v;
   dateOpen.value = false;
@@ -117,7 +126,7 @@ function pickDate(v: string) {
       <div v-if="mode === 'sales' || mode === 'report'" class="relative">
         <button
           class="press flex items-center w-172px h-54px px-14px rounded-14px bg-date text-white text-17px font-800 cursor-pointer"
-          @click="dateOpen = !dateOpen"
+          @click="toggleDatePicker"
         >
           <span class="flex-1 text-center whitespace-nowrap">{{ dateLabel }}</span>
           <span class="w-12px flex-none text-center text-14px opacity-80" :class="dateOpen ? 'rotate-180' : ''">▾</span>
@@ -127,10 +136,10 @@ function pickDate(v: string) {
           <div
             class="absolute top-full right-0 mt-6px z-50 bg-surface border-2 border-border rounded-18px shadow-[0_8px_24px_rgba(0,0,0,0.12)] p-8px"
           >
-            <DatePicker :model-value="from" :max="todayStr" @update:model-value="pickDate" />
+            <DatePicker :model-value="from" :max="maxDate" @update:model-value="pickDate" />
             <button
               class="w-full h-42px text-14px mt-4px rounded-12px border-none bg-oliveDark text-white font-800 cursor-pointer press"
-              @click="((setToday()), (dateOpen = false))"
+              @click="((setCurrentDay()), (dateOpen = false))"
             >Today</button>
           </div>
         </template>

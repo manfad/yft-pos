@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS items (
   price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
   active INTEGER NOT NULL DEFAULT 1,
   tracks_tail INTEGER NOT NULL DEFAULT 0,
-  sort_order INTEGER NOT NULL DEFAULT 0
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  stock_milli INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS price_tiers (
