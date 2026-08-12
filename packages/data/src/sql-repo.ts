@@ -475,6 +475,13 @@ export class SqlPosRepo implements PosRepo {
     opts: { companyId?: number; auto?: boolean; at?: number } = {},
   ): Promise<DayClose> {
     const companyId = opts.companyId ?? 1;
+    // A day can only be closed once it has arrived on the wall clock. Without
+    // this, closing again after a close (when new sales already carry into
+    // tomorrow) could seal tomorrow prematurely and push sales two days out.
+    const wallToday = localDateStr(opts.at ?? Date.now());
+    if (businessDate > wallToday) {
+      throw new PosError(`cannot close ${businessDate} before that day arrives`);
+    }
     if (await this.getDayClose(businessDate, companyId)) {
       throw new Error(`day ${businessDate} is already closed`);
     }

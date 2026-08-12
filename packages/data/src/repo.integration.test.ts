@@ -423,7 +423,7 @@ describe("Close Day, void, settings, outbox", () => {
   });
 
   it("closes a day once and refuses a second close", async () => {
-    const c = await repo.closeDay("2026-07-13", { companyId: 1, at: 123 });
+    const c = await repo.closeDay("2026-07-13", { companyId: 1, at: new Date(2026, 6, 13, 21).getTime() });
     expect(c.businessDate).toBe("2026-07-13");
     expect(c.auto).toBe(false);
     await expect(repo.closeDay("2026-07-13", { companyId: 1 })).rejects.toThrow(/already closed/);
@@ -551,5 +551,18 @@ describe("stock tracking", () => {
     expect((await repo.getItem(cup.id))!.stockMilli).toBe(9000);
     await repo.updateItem(cup.id, { stockMilli: null });
     expect((await repo.getItem(cup.id))!.stockMilli).toBeNull();
+  });
+});
+
+describe("close-day future guard", () => {
+  it("refuses to close a business day before it arrives on the wall clock", async () => {
+    const repo = await freshRepo();
+    const at = new Date(2026, 6, 13, 21).getTime(); // local 2026-07-13, 9pm
+    await repo.closeDay("2026-07-13", { at }); // today: fine
+    // Sales after the close carry into 2026-07-14 — but that day can't be
+    // closed until the clock reaches it.
+    await expect(repo.closeDay("2026-07-14", { at })).rejects.toThrow(/before that day arrives/);
+    const nextDay = new Date(2026, 6, 14, 8).getTime();
+    await expect(repo.closeDay("2026-07-14", { at: nextDay })).resolves.toBeTruthy();
   });
 });

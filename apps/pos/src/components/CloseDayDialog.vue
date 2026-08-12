@@ -127,7 +127,7 @@ const closedAtText = computed(() =>
           <div class="text-22px font-800 mt-6px">Day closed</div>
           <div class="text-15px font-700 text-muted mt-4px">
             {{ today }} was closed at {{ closedAtText }}{{ closedAs.auto ? " (auto)" : "" }}.<br />
-            New sales now count toward tomorrow.
+            New sales now count toward tomorrow — tomorrow can only be closed once it arrives.
           </div>
           <div class="text-14px font-800 mt-9px" :class="delivery === 'sent' ? 'text-oliveDark' : 'text-terracotta'">
             {{ delivery === "sent" ? "HQ report sent." : delivery === "queued" ? "HQ report queued for automatic retry." : "HQ report is not queued yet." }}
