@@ -137,7 +137,7 @@ const whenStr = computed(() => {
         <button class="btn-pay w-full h-58px text-20px" @click="print">🖨 Print receipt</button>
         <button
           v-if="canVoid"
-          class="w-full h-52px rounded-16px border-2 border-[#d94b3d] bg-white text-17px font-800 text-[#d94b3d] cursor-pointer press"
+          class="w-full h-52px rounded-16px border-2 border-[#d94b3d] bg-[#d94b3d] text-17px font-800 text-white cursor-pointer press"
           @click="pinOpen = true"
         >✕ Cancel this sale (PIN)</button>
       </div>
