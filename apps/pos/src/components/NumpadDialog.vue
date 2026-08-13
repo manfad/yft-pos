@@ -18,9 +18,10 @@ const emit = defineEmits<{ confirm: [value: number]; close: [] }>();
 const entry = ref("");
 // `replace` makes the first keypress overwrite the seeded value (like a till).
 const replace = ref(true);
-// Cents-first entry: `entry` holds cents and every digit shifts the amount left
-// (3,0,0 → 3.00), so there is no "." to press. Money numpads only, and
-// snapshotted on open so `entry` keeps one format for the whole session.
+// Shifted entry: `entry` holds hundredths and every digit shifts the amount
+// left (3,0,0 → 3.00), so there is no "." to press. Money numpads follow the
+// money-entry setting; kg numpads always enter this way (other units never do).
+// Snapshotted on open so `entry` keeps one format for the whole session.
 const cents = ref(false);
 // Room for RM 999,999.99 — beyond that a digit is a mis-tap, not an amount.
 const MAX_CENT_DIGITS = 8;
@@ -33,7 +34,7 @@ watch(
   () => props.open,
   (o) => {
     if (o) {
-      cents.value = props.money === true && moneyEntry.value === "cents";
+      cents.value = (props.money === true && moneyEntry.value === "cents") || props.unit === "kg";
       entry.value = props.initial
         ? String(cents.value ? Math.round(props.initial * 100) : props.initial)
         : "";
