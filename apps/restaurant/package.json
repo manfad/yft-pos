@@ -1,0 +1,49 @@
+{
+  "name": "@yf/restaurant",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Datuk Yap Fish Poud Restaurant — offline ordering and restaurant sales kiosk.",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "electron:main": "esbuild electron/main.ts --bundle --platform=node --format=cjs --outfile=dist-electron/main.cjs --external:better-sqlite3 --external:electron && esbuild electron/preload.ts --bundle --platform=node --format=cjs --outfile=dist-electron/preload.cjs --external:electron",
+    "electron:build": "pnpm build && pnpm electron:main",
+    "dist:win": "pnpm electron:build && electron-builder --win --publish never"
+  },
+  "build": {
+    "appId": "com.datukyap.fishpoud.restaurant",
+    "productName": "Datuk Yap Fish Poud Restaurant",
+    "directories": { "output": "release" },
+    "files": ["dist/**/*", "dist-electron/**/*"],
+    "asarUnpack": ["**/node_modules/better-sqlite3/**"],
+    "win": { "target": ["nsis", "portable"], "artifactName": "${productName}-${version}-${arch}.${ext}" },
+    "nsis": { "perMachine": true, "runAfterFinish": false }
+  },
+  "dependencies": {
+    "@fontsource-variable/fredoka": "^5.1.0",
+    "@fontsource-variable/nunito": "^5.1.0",
+    "@yf/ui": "workspace:*",
+    "better-sqlite3": "^12.11.1",
+    "dayjs": "^1.11.21",
+    "pinia": "^2.2.0",
+    "vue": "^3.5.0",
+    "vue-router": "^4.4.0",
+    "vuedraggable": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@vitejs/plugin-vue": "^5.1.0",
+    "electron": "^42.5.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.6.0",
+    "unocss": "^0.63.0",
+    "vite": "^5.4.0",
+    "vitest": "^2.1.0",
+    "vue-tsc": "^2.1.0"
+  }
+}

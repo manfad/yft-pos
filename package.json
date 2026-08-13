@@ -8,6 +8,9 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "dev": "pnpm --filter @yf/pos dev",
+    "dev:restaurant": "pnpm --filter @yf/restaurant dev",
+    "build:restaurant": "pnpm --filter @yf/restaurant electron:build",
+    "dist:restaurant:win": "pnpm --filter @yf/restaurant dist:win",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"

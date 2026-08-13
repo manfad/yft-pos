@@ -1,3 +1,4 @@
+import { ref } from "vue";
 import { getRepo } from "./db";
 
 // Typed accessors over the DB `settings` table. The same rows are read by the
@@ -11,6 +12,7 @@ export const SETTING_KEYS = {
   recipient: "report_recipient", // legacy single HQ email (pre-list installs)
   recipients: "report_recipients", // newline/comma-separated list the report is sent TO
   paperWidthMm: "paper_width_mm",
+  moneyEntry: "money_entry", // "cents" (till style) | "decimal" (type the point)
 } as const;
 
 /** Confirmation PIN (void / reopen / settings). Defaults to 1234 until changed. */
@@ -23,6 +25,25 @@ export async function getPaperWidthMm(): Promise<number> {
   const repo = await getRepo();
   const v = Number(await repo.getSetting(SETTING_KEYS.paperWidthMm));
   return v === 58 ? 58 : 80;
+}
+
+export type MoneyEntryMode = "cents" | "decimal";
+
+// How the numpad takes RM amounts. Kept in a module ref (like `companies` in
+// place.ts) so the dialog reads it synchronously and a change in Settings
+// applies to the next numpad without a restart.
+export const moneyEntry = ref<MoneyEntryMode>("cents");
+
+/** Load the money-entry mode from the DB (call once at app start). */
+export async function loadMoneyEntry(): Promise<void> {
+  const repo = await getRepo();
+  moneyEntry.value = (await repo.getSetting(SETTING_KEYS.moneyEntry)) === "decimal" ? "decimal" : "cents";
+}
+
+export async function setMoneyEntry(mode: MoneyEntryMode): Promise<void> {
+  const repo = await getRepo();
+  await repo.setSetting(SETTING_KEYS.moneyEntry, mode);
+  moneyEntry.value = mode;
 }
 
 export const parseRecipients = (raw: string): string[] =>

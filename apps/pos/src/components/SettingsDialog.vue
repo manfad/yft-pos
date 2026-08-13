@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { getRepo } from "../db";
-import { parseRecipients, SETTING_KEYS } from "../settings";
+import {
+  loadMoneyEntry,
+  moneyEntry,
+  parseRecipients,
+  setMoneyEntry,
+  SETTING_KEYS,
+  type MoneyEntryMode,
+} from "../settings";
 import { useUi } from "../stores/ui";
 import SelectInput from "./SelectInput.vue";
 import TextInput from "./TextInput.vue";
@@ -27,6 +34,7 @@ const paperOptions = [
   { value: 80, label: "80 mm roll" },
   { value: 58, label: "58 mm roll" },
 ];
+const entryMode = ref<MoneyEntryMode>("cents");
 
 watch(
   () => props.open,
@@ -41,6 +49,8 @@ watch(
     pin.value = (await repo.getSetting(SETTING_KEYS.pin)) ?? "1234";
     const w = Number(await repo.getSetting(SETTING_KEYS.paperWidthMm));
     paperWidth.value = w === 58 ? 58 : 80;
+    await loadMoneyEntry();
+    entryMode.value = moneyEntry.value;
     const config = await window.mailer?.config?.().catch(() => null);
     sender.value = config?.user ?? null;
     senderConfigured.value = config ? config.hasCredentials : null;
@@ -62,6 +72,7 @@ async function save(): Promise<void> {
   await repo.setSetting(SETTING_KEYS.recipients, list.join("\n"));
   if (newPin) await repo.setSetting(SETTING_KEYS.pin, newPin);
   await repo.setSetting(SETTING_KEYS.paperWidthMm, String(paperWidth.value));
+  await setMoneyEntry(entryMode.value);
   ui.showToast("Settings saved");
   emit("close");
 }
@@ -83,7 +94,7 @@ async function save(): Promise<void> {
     <div class="w-520px max-w-full bg-surface rounded-26px shadow-[0_22px_64px_rgba(0,0,0,.32)] overflow-auto" style="max-height: 92vh">
       <div class="px-26px pt-24px pb-16px border-b-2 border-borderSoft">
         <div class="text-22px font-800">Settings</div>
-        <div class="text-14px font-700 text-muted">Daily report email, PIN and printer.</div>
+        <div class="text-14px font-700 text-muted">Daily report email, PIN, printer and money entry.</div>
       </div>
 
       <div class="px-26px py-20px flex flex-col gap-16px">
@@ -117,6 +128,24 @@ async function save(): Promise<void> {
             Receipt paper
             <SelectInput v-model="paperWidth" :options="paperOptions" />
           </label>
+          <div class="flex flex-col gap-5px text-13px font-700 text-muted">
+            Decimal toggle
+            <div class="flex items-center h-44px">
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="entryMode === 'decimal'"
+                class="relative w-58px h-34px rounded-full border-2 cursor-pointer transition-colors duration-150 flex-none"
+                :class="entryMode === 'decimal' ? 'bg-olive border-olive' : 'bg-[#ddd3c0] border-[#ddd3c0]'"
+                @click="entryMode = entryMode === 'decimal' ? 'cents' : 'decimal'"
+              >
+                <span
+                  class="absolute top-2px left-2px w-26px h-26px rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,.25)] transition-transform duration-150"
+                  :class="entryMode === 'decimal' ? 'translate-x-24px' : ''"
+                ></span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

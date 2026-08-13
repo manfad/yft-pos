@@ -29,8 +29,9 @@ const emit = defineEmits<{ "update:modelValue": [value: number] }>();
 defineOptions({ inheritAttrs: false });
 
 const open = ref(false);
-// `decimals: 2` is only ever used for RM amounts; the numpad shows an RM
-// label for those.
+// `decimals: 2` is only ever used for RM amounts; the numpad shows an RM label
+// for those and takes them in whichever entry mode Settings selects (cents-first
+// or plain decimal).
 const money = computed(() => props.decimals === 2);
 function onConfirm(v: number): void {
   emit("update:modelValue", v);

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
+import { moneyEntry } from "../settings";
 
 const props = defineProps<{
   open: boolean;
@@ -17,12 +18,25 @@ const emit = defineEmits<{ confirm: [value: number]; close: [] }>();
 const entry = ref("");
 // `replace` makes the first keypress overwrite the seeded value (like a till).
 const replace = ref(true);
+// Cents-first entry: `entry` holds cents and every digit shifts the amount left
+// (3,0,0 → 3.00), so there is no "." to press. Money numpads only, and
+// snapshotted on open so `entry` keeps one format for the whole session.
+const cents = ref(false);
+// Room for RM 999,999.99 — beyond that a digit is a mis-tap, not an amount.
+const MAX_CENT_DIGITS = 8;
+
+const display = computed(() =>
+  cents.value ? ((Number(entry.value) || 0) / 100).toFixed(2) : entry.value || "0",
+);
 
 watch(
   () => props.open,
   (o) => {
     if (o) {
-      entry.value = props.initial ? String(props.initial) : "";
+      cents.value = props.money === true && moneyEntry.value === "cents";
+      entry.value = props.initial
+        ? String(cents.value ? Math.round(props.initial * 100) : props.initial)
+        : "";
       replace.value = true;
     }
   },
@@ -35,6 +49,7 @@ function tap(k: string): void {
     entry.value = entry.value.slice(0, -1);
     return;
   }
+  if (k === "." && cents.value) return;
   if (replace.value) {
     entry.value = "";
     replace.value = false;
@@ -42,6 +57,11 @@ function tap(k: string): void {
   if (k === ".") {
     if (entry.value.includes(".")) return;
     if (entry.value === "") entry.value = "0";
+  }
+  if (cents.value) {
+    if (entry.value.length >= MAX_CENT_DIGITS) return;
+    entry.value = (entry.value + k).replace(/^0+(?=\d)/, "");
+    return;
   }
   entry.value += k;
 }
@@ -52,11 +72,13 @@ function clearAll(): void {
 }
 
 function ok(): void {
-  emit("confirm", Number(entry.value) || 0);
+  const n = Number(entry.value) || 0;
+  emit("confirm", cents.value ? n / 100 : n);
 }
 
-// Hardware keyboard / USB numpad support: digits and "." type, Backspace
-// deletes, Enter confirms, Escape cancels.
+// Hardware keyboard / USB numpad support: digits and "." type (the "." being
+// ignored in cents-first mode, as on the keypad), Backspace deletes, Enter
+// confirms, Escape cancels.
 function onKeydown(e: KeyboardEvent): void {
   if (/^[0-9.]$/.test(e.key)) tap(e.key);
   else if (e.key === "Backspace") tap("⌫");
@@ -90,18 +112,26 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
         <div class="text-15px font-800 text-muted uppercase tracking-wider">{{ title }}</div>
         <div class="mt-8px flex items-baseline justify-end gap-10px bg-[#f4ecdc] rounded-16px px-20px py-14px min-h-72px">
           <span v-if="money && !unit" class="mr-auto text-22px font-800 text-muted">RM</span>
-          <span class="font-display text-52px font-700 text-ink leading-none">{{ entry || "0" }}</span>
+          <span class="font-display text-52px font-700 text-ink leading-none">{{ display }}</span>
           <span class="text-22px font-800 text-muted">{{ unitText }}</span>
         </div>
       </div>
 
       <!-- keypad -->
       <div class="p-20px grid grid-cols-3 gap-12px overflow-auto flex-1 min-h-0">
+        <!-- "." keeps its cell (blank and inert) in cents-first mode so the 3-column grid holds. -->
         <button
           v-for="k in KEYS"
           :key="k"
-          class="h-64px rounded-16px border-2 text-28px font-800 cursor-pointer press"
-          :class="k === '⌫' ? 'border-[#d94b3d] bg-[#d94b3d] text-white' : 'border-border bg-tile text-ink'"
+          class="h-64px rounded-16px border-2 text-28px font-800"
+          :class="
+            k === '.' && cents
+              ? 'border-transparent bg-transparent text-transparent cursor-default'
+              : k === '⌫'
+                ? 'border-[#d94b3d] bg-[#d94b3d] text-white cursor-pointer press'
+                : 'border-border bg-tile text-ink cursor-pointer press'
+          "
+          :disabled="k === '.' && cents"
           @click="tap(k)"
         >{{ k }}</button>
       </div>

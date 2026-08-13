@@ -5,6 +5,7 @@ import Toast from "./components/Toast.vue";
 import { loadCompanies } from "./place";
 import { loadUserImages } from "./productImage";
 import { autoCloseUnclosedDays } from "./business";
+import { loadMoneyEntry } from "./settings";
 import { useUi } from "./stores/ui";
 
 const ui = useUi();
@@ -12,6 +13,7 @@ const ui = useUi();
 onMounted(() => {
   void loadCompanies();
   void loadUserImages();
+  void loadMoneyEntry();
   // Forgot-to-close fallback: close past days automatically and email HQ.
   void autoCloseUnclosedDays()
     .then((dates) => {

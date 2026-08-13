@@ -1,0 +1,17 @@
+html, body, #app { width: 100%; height: 100%; }
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #f1e9db;
+  color: #2c2620;
+  font-family: "Nunito Variable", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+input, textarea, output { user-select: text; }
+button { touch-action: manipulation; }
+* { scrollbar-width: thin; scrollbar-color: #c7b99d transparent; }
+*::-webkit-scrollbar { width: 12px; height: 12px; }
+*::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px; background: #c7b99d; background-clip: padding-box; }
+*:focus-visible { outline: 3px solid #6e8a4e; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
