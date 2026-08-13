@@ -2,6 +2,7 @@
 import { computed, onUnmounted, ref, watch } from "vue";
 import { fmtMoney, PAYMENT_METHODS, toCents, toRM, type PaymentMethod } from "@yf/core";
 import { PAYMENT_UI } from "../payments";
+import { moneyEntry } from "../settings";
 
 const props = defineProps<{ open: boolean; totalCents: number }>();
 // "Credit" is special: it opens the creditor picker rather than settling here.
@@ -11,14 +12,26 @@ const emit = defineEmits<{ confirm: [method: PaymentMethod]; credit: []; close: 
 // is a cashier's scratch pad: nothing it computes is stored with the sale.
 const view = ref<"methods" | "calc">("methods");
 const receivedEntry = ref("");
-const receivedText = computed(() => receivedEntry.value || "0");
-const changeCents = computed(() => toCents(Number(receivedEntry.value) || 0) - props.totalCents);
+// Cents-first entry (the money-entry setting): `receivedEntry` holds cents and
+// every digit shifts the amount left (3,0,0 → 3.00), so there is no "." to
+// press. Snapshotted when the calculator opens so one session keeps one format.
+const cents = ref(false);
+// Room for RM 999,999.99 — beyond that a digit is a mis-tap, not an amount.
+const MAX_CENT_DIGITS = 8;
+const receivedText = computed(() =>
+  cents.value ? ((Number(receivedEntry.value) || 0) / 100).toFixed(2) : receivedEntry.value || "0",
+);
+const receivedCents = computed(() =>
+  cents.value ? Number(receivedEntry.value) || 0 : toCents(Number(receivedEntry.value) || 0),
+);
+const changeCents = computed(() => receivedCents.value - props.totalCents);
 const short = computed(() => changeCents.value < 0);
 const amount = (cents: number): string => toRM(cents).toFixed(2);
 
 const KEYS = ["7", "8", "9", "4", "5", "6", "1", "2", "3", ".", "0", "⌫"];
 
 function openCalc(): void {
+  cents.value = moneyEntry.value === "cents";
   receivedEntry.value = "";
   view.value = "calc";
 }
@@ -28,9 +41,15 @@ function tap(k: string): void {
     receivedEntry.value = receivedEntry.value.slice(0, -1);
     return;
   }
+  if (k === "." && cents.value) return;
   if (k === ".") {
     if (receivedEntry.value.includes(".")) return;
     if (receivedEntry.value === "") receivedEntry.value = "0";
+  }
+  if (cents.value) {
+    if (receivedEntry.value.length >= MAX_CENT_DIGITS) return;
+    receivedEntry.value = (receivedEntry.value + k).replace(/^0+(?=\d)/, "");
+    return;
   }
   receivedEntry.value += k;
 }
