@@ -147,7 +147,7 @@ const ekorOrders: Order[] = [
 const rowsOf = (workbook: XLSX.WorkBook, name: string): unknown[][] =>
   XLSX.utils.sheet_to_json(workbook.Sheets[name]!, { header: 1, raw: true, defval: "" });
 
-describe("daily Excel workbook (template v3)", () => {
+describe("daily Excel workbook (template v4)", () => {
   it("puts a sheet per active ekor item between Today Sales and Sales Detail", () => {
     const workbook = buildDailyWorkbook(orders, catalog, outstanding);
     expect(workbook.SheetNames).toEqual([
@@ -210,10 +210,31 @@ describe("daily Excel workbook (template v3)", () => {
     const today = rowsOf(workbook, "Today Sales");
     expect(today[0]).toEqual([...TODAY_SALES_HEADERS]);
     expect(today[1]).toEqual(["Ikan Tilapia", 25, "2.5 kg", 62.5]);
-    expect(workbook.Sheets["Today Sales"]!["D5"]?.f).toBe("SUM(D2:D4)");
     expect(today).toContainEqual(["Cash", "", 1, 69.3]);
     expect(today).toContainEqual(["Credit", "", 1, 12]);
     expect(today.flat()).toContain("Voided: 1 sale(s)");
+  });
+
+  it("splits credit items into their own block on Today Sales", () => {
+    const workbook = buildDailyWorkbook(orders);
+    const today = rowsOf(workbook, "Today Sales");
+    // Paid items first, then the credit block — Ayam was bought on credit.
+    expect(today[1]?.[0]).toBe("Ikan Tilapia");
+    expect(today[2]?.[0]).toBe("Fresh Milk");
+    expect(today[4]?.[0]).toBe("BY ITEM - CREDIT");
+    expect(today[5]).toEqual(["Ayam", 12, "1 pc", 12]);
+    expect(today[6]?.[0]).toBe("TOTAL");
+    // TOTAL spans both blocks, skipping the heading rows in between.
+    expect(workbook.Sheets["Today Sales"]!["D7"]?.f).toBe("SUM(D2:D3)+SUM(D6:D6)");
+  });
+
+  it("keeps Today Sales in one block when nothing was sold on credit", () => {
+    const cashOnly = orders.filter((order) => order.method !== "Credit");
+    const workbook = buildDailyWorkbook(cashOnly);
+    const today = rowsOf(workbook, "Today Sales");
+    expect(today.flat()).not.toContain("BY ITEM - CREDIT");
+    expect(today[3]?.[0]).toBe("TOTAL");
+    expect(workbook.Sheets["Today Sales"]!["D4"]?.f).toBe("SUM(D2:D3)");
   });
 
   it("carries the whole invoice amount onto each ekor sheet it appears on", () => {

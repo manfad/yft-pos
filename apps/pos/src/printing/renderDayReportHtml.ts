@@ -10,6 +10,10 @@ import { printableWidthMm } from "./renderReceiptHtml";
 
 // The paper copy of the daily sales report, printed on the roll at Close Day —
 // same layout family as the receipt (renderReceiptHtml.ts).
+//
+// Credit sales are money owed rather than money taken, so their items are split
+// out of BY ITEM into their own BY ITEM - CREDIT section. Both sections are part
+// of the day's trade: BY ITEM + BY ITEM - CREDIT = BY PAYMENT = TOTAL.
 
 const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -25,20 +29,31 @@ export function renderDayReportHtml(opts: {
 }): string {
   const width = opts.paperWidthMm ?? 80;
   const contentWidth = printableWidthMm(width);
-  const stats = computeStats(opts.orders, "today");
-  const sales = aggregateItemSales(opts.orders);
   const voided = opts.orders.filter((o) => o.voidedAt != null);
 
-  const itemRows = sales
-    .map(
-      (s) => `
+  // Only the item breakdown is split by credit; the totals cover the whole day.
+  const paidOrders = opts.orders.filter((o) => o.method !== "Credit");
+  const creditOrders = opts.orders.filter((o) => o.method === "Credit");
+  const stats = computeStats(opts.orders, "today");
+  const sales = aggregateItemSales(paidOrders);
+  const creditSales = aggregateItemSales(creditOrders);
+
+  const itemRow = (s: (typeof sales)[number]): string => `
       <div class="row">
         <span class="name">${esc(s.name)}</span>
         <span class="qty">${s.tailCount ? `${s.tailCount} ekor · ` : ""}${esc(fmtQtyUnit(s.qtyMilli, s.unit))}</span>
         <span class="amt">${esc(rm(s.amountCents))}</span>
-      </div>`,
-    )
-    .join("");
+      </div>`;
+
+  const itemRows = sales.map(itemRow).join("");
+
+  // Same per-item shape as BY ITEM, but for what left the shop on the book.
+  // No subtotal here — BY PAYMENT's Credit line already carries that number.
+  const creditSection = creditSales.length
+    ? `<div class="hr"></div>
+    <div class="h">BY ITEM - CREDIT</div>
+    ${creditSales.map(itemRow).join("")}`
+    : "";
 
   const methodRows = PAYMENT_METHODS.map((m) => {
     const b = stats.byMethod[m];
@@ -103,6 +118,7 @@ export function renderDayReportHtml(opts: {
     <div class="hr"></div>
     <div class="h">BY ITEM</div>
     ${itemRows || '<div class="meta">No sales.</div>'}
+    ${creditSection}
     <div class="hr"></div>
     <div class="h">BY PAYMENT</div>
     ${methodRows}

@@ -13,11 +13,12 @@ import {
 } from "@yf/core";
 
 /** Increment when HQ changes the stable workbook contract. */
-export const DAILY_WORKBOOK_TEMPLATE_VERSION = 3;
+export const DAILY_WORKBOOK_TEMPLATE_VERSION = 4;
 
-// v3 sheet set:
+// v4 sheet set (v3 held Today Sales' credit items in the one item block):
 //   Sales List — one row per sale, amount split into Cash/Credit columns
-//   Today Sales — per-item totals (qty merged with unit) + payment breakdown
+//   Today Sales — per-item totals (qty merged with unit), credit items in their
+//     own BY ITEM - CREDIT block below, then TOTAL over both + payment breakdown
 //   <one sheet per ekor item> — every active tail-tracking item in the catalogue
 //     gets its own sheet, named after the item, in catalogue order. One row per
 //     sale containing that item; qty is that item's ekor count. Emitted even
@@ -83,6 +84,22 @@ function setFormulaOrZero(
     : { t: "n", v: 0, z: format };
 }
 
+/** Same, for a column whose rows are split into blocks by a section heading. */
+function setBlockSumOrZero(
+  sheet: XLSX.WorkSheet,
+  cell: string,
+  column: string,
+  blocks: { firstRow: number; rows: number }[],
+  format = "0.00",
+): void {
+  const sums = blocks
+    .filter((block) => block.rows > 0)
+    .map((block) => `SUM(${column}${block.firstRow}:${column}${block.firstRow + block.rows - 1})`);
+  sheet[cell] = sums.length
+    ? { t: "n", f: sums.join("+"), z: format }
+    : { t: "n", v: 0, z: format };
+}
+
 function setNumberFormat(
   sheet: XLSX.WorkSheet,
   column: number,
@@ -140,19 +157,35 @@ function salesListSheet(orders: Order[]): XLSX.WorkSheet {
 
 /** Sheet 2 — per-item totals (qty merged with its unit) + payment breakdown. */
 function todaySalesSheet(orders: Order[]): XLSX.WorkSheet {
-  const sales = aggregateItemSales(orders);
+  // Credit sales are money owed rather than money taken, so their items get
+  // their own block below the paid ones — same split as the printed day report
+  // (renderDayReportHtml.ts). TOTAL still spans both.
+  const sales = aggregateItemSales(orders.filter((order) => order.method !== "Credit"));
+  const creditSales = aggregateItemSales(orders.filter((order) => order.method === "Credit"));
   const stats = computeStats(orders, "today");
   const voided = orders.filter((order) => order.voidedAt != null);
-  const rows: (string | number)[][] = [[...TODAY_SALES_HEADERS]];
-  for (const sale of sales) {
+
+  const itemRow = (sale: (typeof sales)[number]): (string | number)[] => {
     const qty = toQty(sale.qtyMilli);
-    rows.push([
+    return [
       sale.name,
       qty > 0 ? toRM(Math.round(sale.amountCents / qty)) : "",
       fmtQtyUnit(sale.qtyMilli, sale.unit),
       toRM(sale.amountCents),
-    ]);
+    ];
+  };
+
+  const rows: (string | number)[][] = [[...TODAY_SALES_HEADERS]];
+  for (const sale of sales) rows.push(itemRow(sale));
+  const blocks = [{ firstRow: 2, rows: sales.length }];
+
+  if (creditSales.length) {
+    rows.push([]);
+    rows.push(["BY ITEM - CREDIT"]);
+    blocks.push({ firstRow: rows.length + 1, rows: creditSales.length });
+    for (const sale of creditSales) rows.push(itemRow(sale));
   }
+
   const totalRowIndex = rows.length + 1; // 1-based sheet row of the TOTAL line
   rows.push(["TOTAL", "", "", 0]);
   rows.push([]);
@@ -171,7 +204,7 @@ function todaySalesSheet(orders: Order[]): XLSX.WorkSheet {
   }
   rows.push([`${stats.count} sale(s), ${voided.length} voided`]);
   const sheet = XLSX.utils.aoa_to_sheet(rows);
-  setFormulaOrZero(sheet, `D${totalRowIndex}`, "D", 2, sales.length);
+  setBlockSumOrZero(sheet, `D${totalRowIndex}`, "D", blocks);
   setNumberFormat(sheet, 1, 1, totalRowIndex - 1, "0.00");
   setNumberFormat(sheet, 3, 1, rows.length, "0.00");
   sheet["!cols"] = [{ wch: 26 }, { wch: 15 }, { wch: 13 }, { wch: 14 }];
